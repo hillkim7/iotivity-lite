@@ -1066,7 +1066,8 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
     if (!(*response_state)) {
       OC_DBG("creating new block-wise response state");
       *response_state = oc_blockwise_alloc_response_buffer(
-        uri_path, uri_path_len, endpoint, method, OC_BLOCKWISE_SERVER);
+        uri_path, uri_path_len, endpoint, method, OC_BLOCKWISE_SERVER,
+        OC_MIN_APP_DATA_SIZE);
       if (!(*response_state)) {
         OC_ERR("failure to alloc response state");
         bad_request = true;
@@ -1076,7 +1077,7 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
                         uri_query_len);
         }
         response_buffer.buffer = (*response_state)->buffer;
-        response_buffer.buffer_size = OC_MAX_APP_DATA_SIZE;
+        response_buffer.buffer_size = OC_MIN_APP_DATA_SIZE;
       }
     }
   }
@@ -1086,6 +1087,7 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
 #endif /* !OC_BLOCK_WISE */
 
   if (cur_resource && !bad_request) {
+
     /* Process a request against a valid resource, request payload, and
      * interface.
      */
@@ -1093,7 +1095,7 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
      * points to memory allocated in the messaging layer for the "CoAP
      * Transaction" to service this request.
      */
-    oc_rep_new(response_buffer.buffer, response_buffer.buffer_size);
+    oc_rep_new(&response_buffer.buffer, response_buffer.buffer_size, true);
 
 #ifdef OC_SECURITY
     /* If cur_resource is a coaps:// resource, then query ACL to check if
@@ -1139,6 +1141,12 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
 #if defined(OC_BLOCK_WISE)
   oc_blockwise_free_request_buffer(*request_state);
   *request_state = NULL;
+#ifdef OC_DYNAMIC_ALLOCATION
+  // for realloc we need reassign memory again.
+  if (response_state && (*response_state)) {
+    (*response_state)->buffer = response_buffer.buffer;
+  }
+#endif
 #endif
 
   if (request_obj.request_payload) {

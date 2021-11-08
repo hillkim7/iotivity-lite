@@ -537,9 +537,9 @@ void
 oc_set_separate_response_buffer(oc_separate_response_t *handle)
 {
 #ifdef OC_BLOCK_WISE
-  oc_rep_new(handle->buffer, OC_MAX_APP_DATA_SIZE);
+  oc_rep_new((uint8_t **)&handle->buffer, OC_MAX_APP_DATA_SIZE, false);
 #else  /* OC_BLOCK_WISE */
-  oc_rep_new(handle->buffer, OC_BLOCK_SIZE);
+  oc_rep_new((uint8_t **)&handle->buffer, OC_BLOCK_SIZE, false);
 #endif /* !OC_BLOCK_WISE */
 }
 
@@ -593,7 +593,8 @@ oc_send_separate_response(oc_separate_response_t *handle,
           }
           response_state = oc_blockwise_alloc_response_buffer(
             oc_string(cur->uri), oc_string_len(cur->uri), &cur->endpoint,
-            cur->method, OC_BLOCKWISE_SERVER);
+            cur->method, OC_BLOCKWISE_SERVER,
+            (uint32_t)response_buffer.response_length);
           if (!response_state) {
             goto next_separate_request;
           }

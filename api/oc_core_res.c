@@ -587,6 +587,9 @@ oc_core_get_platform_info(void)
 oc_resource_t *
 oc_core_get_resource_by_index(int type, size_t device)
 {
+  if (core_resources == NULL) {
+    return NULL;
+  }
   if (type == OCF_P) {
     return &core_resources[0];
   }

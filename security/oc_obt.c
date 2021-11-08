@@ -254,11 +254,11 @@ free_device(void *data)
 static void
 oc_obt_dump_state(void)
 {
-  uint8_t *buf = malloc(OC_MAX_APP_DATA_SIZE);
+  uint8_t *buf = malloc(OC_MIN_APP_DATA_SIZE);
   if (!buf)
     return;
 
-  oc_rep_new(buf, OC_MAX_APP_DATA_SIZE);
+  oc_rep_new(&buf, OC_MIN_APP_DATA_SIZE, true);
   oc_rep_start_root_object();
 #ifdef OC_PKI
   oc_rep_set_byte_string(root, private_key, private_key, private_key_size);

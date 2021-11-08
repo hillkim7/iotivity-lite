@@ -138,18 +138,19 @@ prepare_coap_request(oc_client_cb_t *cb)
     return false;
   }
 
-  oc_rep_new(transaction->message->data + COAP_MAX_HEADER_SIZE, OC_BLOCK_SIZE);
+  uint8_t *buf = transaction->message->data + COAP_MAX_HEADER_SIZE;
+  oc_rep_new(&buf, OC_BLOCK_SIZE, false);
 
 #ifdef OC_BLOCK_WISE
   if (cb->method == OC_PUT || cb->method == OC_POST) {
     request_buffer = oc_blockwise_alloc_request_buffer(
       oc_string(cb->uri) + 1, oc_string_len(cb->uri) - 1, &cb->endpoint,
-      cb->method, OC_BLOCKWISE_CLIENT);
+      cb->method, OC_BLOCKWISE_CLIENT, OC_MIN_APP_DATA_SIZE);
     if (!request_buffer) {
       OC_ERR("request_buffer is NULL");
       return false;
     }
-    oc_rep_new(request_buffer->buffer, OC_MAX_APP_DATA_SIZE);
+    oc_rep_new((uint8_t **)&request_buffer->buffer, OC_MIN_APP_DATA_SIZE, true);
 
     request_buffer->mid = cb->mid;
     request_buffer->client_cb = cb;
@@ -256,7 +257,8 @@ oc_init_multicast_update(const char *uri, const char *query)
 
   memcpy(&multicast_update->endpoint, &mcast, sizeof(oc_endpoint_t));
 
-  oc_rep_new(multicast_update->data + COAP_MAX_HEADER_SIZE, OC_BLOCK_SIZE);
+  uint8_t *buf = multicast_update->data + COAP_MAX_HEADER_SIZE;
+  oc_rep_new(&buf, OC_BLOCK_SIZE, false);
 
   coap_udp_init_message(request, type, OC_POST, coap_get_mid());
 
