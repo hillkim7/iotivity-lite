@@ -437,8 +437,10 @@ coap_notify_collection_baseline(oc_collection_t *collection)
     return -1;
   }
 #endif /* OC_DYNAMIC_ALLOCATION */
-  oc_request_t request = { 0 };
-  oc_response_t response = { 0 };
+  oc_request_t request;
+  memset(&request, 0, sizeof(request));
+  oc_response_t response;
+  memset(&response, 0, sizeof(response));
   response.separate_response = 0;
   oc_response_buffer_t response_buffer;
   response_buffer.buffer = buffer;
@@ -446,7 +448,11 @@ coap_notify_collection_baseline(oc_collection_t *collection)
   response.response_buffer = &response_buffer;
   request.response = &response;
   request.request_payload = NULL;
-  oc_rep_new(&response_buffer.buffer, response_buffer.buffer_size, true);
+#ifdef OC_DYNAMIC_ALLOCATION
+  oc_rep_new_realloc(&response_buffer.buffer, response_buffer.buffer_size);
+#else  /* OC_DYNAMIC_ALLOCATION */
+  oc_rep_new(response_buffer.buffer, response_buffer.buffer_size)
+#endif /* !OC_DYNAMIC_ALLOCATION */
 
   request.resource = (oc_resource_t *)collection;
 
@@ -474,8 +480,10 @@ coap_notify_collection_batch(oc_collection_t *collection)
     return -1;
   }
 #endif /* OC_DYNAMIC_ALLOCATION */
-  oc_request_t request = { 0 };
-  oc_response_t response = { 0 };
+  oc_request_t request;
+  memset(&request, 0, sizeof(request));
+  oc_response_t response;
+  memset(&response, 0, sizeof(response));
   response.separate_response = 0;
   oc_response_buffer_t response_buffer;
   response_buffer.buffer = buffer;
@@ -483,7 +491,11 @@ coap_notify_collection_batch(oc_collection_t *collection)
   response.response_buffer = &response_buffer;
   request.response = &response;
   request.request_payload = NULL;
-  oc_rep_new(&response_buffer.buffer, response_buffer.buffer_size, true);
+#ifdef OC_DYNAMIC_ALLOCATION
+  oc_rep_new_realloc(&response_buffer.buffer, response_buffer.buffer_size);
+#else  /* OC_DYNAMIC_ALLOCATION */
+  oc_rep_new(response_buffer.buffer, response_buffer.buffer_size)
+#endif /* !OC_DYNAMIC_ALLOCATION */
 
   request.resource = (oc_resource_t *)collection;
 
@@ -511,8 +523,10 @@ coap_notify_collection_links_list(oc_collection_t *collection)
     return -1;
   }
 #endif /* OC_DYNAMIC_ALLOCATION */
-  oc_request_t request = { 0 };
-  oc_response_t response = { 0 };
+  oc_request_t request;
+  memset(&request, 0, sizeof(request));
+  oc_response_t response;
+  memset(&response, 0, sizeof(response));
   response.separate_response = 0;
   oc_response_buffer_t response_buffer;
   response_buffer.buffer = buffer;
@@ -520,7 +534,11 @@ coap_notify_collection_links_list(oc_collection_t *collection)
   response.response_buffer = &response_buffer;
   request.response = &response;
   request.request_payload = NULL;
-  oc_rep_new(&response_buffer.buffer, response_buffer.buffer_size, true);
+#ifdef OC_DYNAMIC_ALLOCATION
+  oc_rep_new_realloc(&response_buffer.buffer, response_buffer.buffer_size);
+#else  /* OC_DYNAMIC_ALLOCATION */
+  oc_rep_new(response_buffer.buffer, response_buffer.buffer_size)
+#endif /* !OC_DYNAMIC_ALLOCATION */
 
   request.resource = (oc_resource_t *)collection;
 
@@ -551,8 +569,10 @@ coap_notify_collections(oc_resource_t *resource)
 
   int num_links = 0;
 
-  oc_request_t request = { 0 };
-  oc_response_t response = { 0 };
+  oc_request_t request;
+  memset(&request, 0, sizeof(request));
+  oc_response_t response;
+  memset(&response, 0, sizeof(response));
   response.separate_response = 0;
   oc_response_buffer_t response_buffer;
   response_buffer.buffer = buffer;
@@ -560,7 +580,11 @@ coap_notify_collections(oc_resource_t *resource)
   response.response_buffer = &response_buffer;
   request.response = &response;
   request.request_payload = NULL;
-  oc_rep_new(&response_buffer.buffer, response_buffer.buffer_size, true);
+#ifdef OC_DYNAMIC_ALLOCATION
+  oc_rep_new_realloc(&response_buffer.buffer, response_buffer.buffer_size);
+#else  /* OC_DYNAMIC_ALLOCATION */
+  oc_rep_new(response_buffer.buffer, response_buffer.buffer_size)
+#endif /* !OC_DYNAMIC_ALLOCATION */
 
   oc_collection_t *collection = NULL;
 
@@ -665,8 +689,10 @@ coap_notify_observers(oc_resource_t *resource,
     } //! buffer
 #endif /* OC_DYNAMIC_ALLOCATION */
 
-    oc_request_t request = { 0 };
-    oc_response_t response = { 0 };
+    oc_request_t request;
+    memset(&request, 0, sizeof(request));
+    oc_response_t response;
+    memset(&response, 0, sizeof(response));
     response.separate_response = 0;
     oc_response_buffer_t response_buffer;
     if (!response_buf && resource) {
@@ -678,7 +704,11 @@ coap_notify_observers(oc_resource_t *resource,
       request.resource = resource;
       request.response = &response;
       request.request_payload = NULL;
-      oc_rep_new(&response_buffer.buffer, response_buffer.buffer_size, true);
+#ifdef OC_DYNAMIC_ALLOCATION
+      oc_rep_new_realloc(&response_buffer.buffer, response_buffer.buffer_size);
+#else  /* OC_DYNAMIC_ALLOCATION */
+      oc_rep_new(response_buffer.buffer, response_buffer.buffer_size);
+#endif /* !OC_DYNAMIC_ALLOCATION */
 #ifdef OC_COLLECTIONS
       if (oc_check_if_collection(resource)) {
         resource_is_collection = true;
@@ -908,9 +938,10 @@ notify_resource_defaults_observer(oc_resource_t *resource,
 #endif /* OC_DYNAMIC_ALLOCATION */
 
   coap_observer_t *obs = NULL;
-  oc_request_t request = { 0 };
-  oc_response_t response = { 0 };
-  response.separate_response = 0;
+  oc_request_t request;
+  memset(&request, 0, sizeof(request));
+  oc_response_t response;
+  memset(&response, 0, sizeof(response));
   oc_response_buffer_t response_buffer;
   OC_DBG("coap_notify_observers: Issue GET request to resource %s\n\n",
          oc_string(resource->uri));
@@ -920,7 +951,11 @@ notify_resource_defaults_observer(oc_resource_t *resource,
   request.resource = resource;
   request.response = &response;
   request.request_payload = NULL;
-  oc_rep_new(&response_buffer.buffer, response_buffer.buffer_size, true);
+#ifdef OC_DYNAMIC_ALLOCATION
+  oc_rep_new_realloc(&response_buffer.buffer, response_buffer.buffer_size);
+#else  /* OC_DYNAMIC_ALLOCATION */
+  oc_rep_new(response_buffer.buffer, response_buffer.buffer_size);
+#endif /* !OC_DYNAMIC_ALLOCATION */
   resource->get_handler.cb(&request, iface_mask,
                            resource->get_handler.user_data);
   response_buf = &response_buffer;

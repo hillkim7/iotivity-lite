@@ -25,12 +25,27 @@
 #include <inttypes.h>
 
 static struct oc_memb *rep_objects;
-static uint8_t **g_buf;
 CborEncoder g_encoder, root_map, links_array;
 CborError g_err;
 #ifdef OC_DYNAMIC_ALLOCATION
 static bool g_enable_realloc;
 static size_t g_buf_size;
+static uint8_t **g_buf;
+static uint8_t *
+get_g_buf()
+{
+  if (!g_enable_realloc) {
+    return (uint8_t *)g_buf;
+  }
+  return g_buf ? *g_buf : NULL;
+}
+#else
+static uint8_t *g_buf;
+static uint8_t *
+get_g_buf()
+{
+  return g_buf;
+}
 #endif
 
 static CborEncoder *
@@ -39,7 +54,7 @@ convert_offset_to_ptr(CborEncoder *encoder)
   if (!encoder || (encoder->data.ptr && !encoder->end)) {
     return encoder;
   }
-  uint8_t *ptr = g_buf ? *g_buf : NULL;
+  uint8_t *ptr = get_g_buf();
   encoder->data.ptr = ptr + (intptr_t)encoder->data.ptr;
 #ifdef OC_DYNAMIC_ALLOCATION
   encoder->end = ptr ? ptr + g_buf_size : NULL;
@@ -55,7 +70,7 @@ convert_ptr_to_offset(CborEncoder *encoder)
   if (!encoder || (encoder->data.ptr && !encoder->end)) {
     return encoder;
   }
-  uint8_t *ptr = g_buf ? *g_buf : NULL;
+  uint8_t *ptr = get_g_buf();
   encoder->data.ptr = (uint8_t *)(encoder->data.ptr - ptr);
   encoder->end = (uint8_t *)(encoder->end - ptr);
   return encoder;
@@ -74,7 +89,7 @@ oc_rep_encoder_get_extra_bytes_needed(CborEncoder *encoder)
 static CborError
 realloc_buffer(size_t needed)
 {
-  if (g_buf_size + needed > (size_t)OC_MAX_APP_DATA_SIZE) {
+  if (!g_enable_realloc || g_buf_size + needed > (size_t)OC_MAX_APP_DATA_SIZE) {
     return CborErrorOutOfMemory;
   }
   // preallocate buffer to avoid reallocation
@@ -101,19 +116,32 @@ oc_rep_set_pool(struct oc_memb *rep_objects_pool)
 }
 
 void
-oc_rep_new(uint8_t **out_payload, int size, bool enable_realloc)
+oc_rep_new(uint8_t *out_payload, int size)
 {
   g_err = CborNoError;
-  g_buf = out_payload;
 #ifdef OC_DYNAMIC_ALLOCATION
-  g_enable_realloc = enable_realloc;
+  g_enable_realloc = false;
   g_buf_size = size;
+  g_buf = (uint8_t **)out_payload;
 #else
-  (void)enable_realloc;
+  g_buf = out_payload;
 #endif
+  cbor_encoder_init(&g_encoder, out_payload, size, 0);
+  convert_ptr_to_offset(&g_encoder);
+}
+
+#ifdef OC_DYNAMIC_ALLOCATION
+void
+oc_rep_new_realloc(uint8_t **out_payload, int size)
+{
+  g_err = CborNoError;
+  g_enable_realloc = true;
+  g_buf_size = size;
+  g_buf = (uint8_t **)out_payload;
   cbor_encoder_init(&g_encoder, *out_payload, size, 0);
   convert_ptr_to_offset(&g_encoder);
 }
+#endif /* OC_DYNAMIC_ALLOCATION */
 
 CborError
 oc_rep_get_cbor_errno(void)
@@ -124,7 +152,7 @@ oc_rep_get_cbor_errno(void)
 const uint8_t *
 oc_rep_get_encoder_buf(void)
 {
-  return *g_buf;
+  return get_g_buf();
 }
 
 void
@@ -164,10 +192,7 @@ oc_rep_encode_raw(const uint8_t *data, size_t len)
 int
 oc_rep_get_encoded_payload_size(void)
 {
-  uint8_t *buf = NULL;
-  if (g_buf != NULL) {
-    buf = *g_buf;
-  }
+  uint8_t *buf = get_g_buf();
   convert_offset_to_ptr(&g_encoder);
   size_t size = cbor_encoder_get_buffer_size(&g_encoder, buf);
 #ifdef OC_DEBUG
@@ -1129,7 +1154,7 @@ oc_rep_encoder_create_map(CborEncoder *encoder, CborEncoder *mapEncoder,
   memcpy(&prevEncoder, encoder, sizeof(encoder));
   CborError err =
     oc_rep_encoder_create_map_internal(encoder, mapEncoder, length);
-  if (err == CborErrorOutOfMemory && g_enable_realloc) {
+  if (err == CborErrorOutOfMemory) {
     err = realloc_buffer(oc_rep_encoder_get_extra_bytes_needed(mapEncoder));
     if (err != CborNoError) {
       return err;
@@ -1167,7 +1192,7 @@ oc_rep_encoder_close_container(CborEncoder *encoder,
   memcpy(&prevEncoder, encoder, sizeof(prevEncoder));
   CborError err =
     oc_rep_encoder_close_container_internal(encoder, containerEncoder);
-  if (err == CborErrorOutOfMemory && g_enable_realloc) {
+  if (err == CborErrorOutOfMemory) {
     err = realloc_buffer(oc_rep_encoder_get_extra_bytes_needed(encoder));
     if (err != CborNoError) {
       return err;
@@ -1201,7 +1226,7 @@ oc_rep_encode_text_string(CborEncoder *encoder, const char *string,
   CborEncoder prevEncoder;
   memcpy(&prevEncoder, encoder, sizeof(prevEncoder));
   CborError err = oc_rep_encode_text_string_internal(encoder, string, length);
-  if (err == CborErrorOutOfMemory && g_enable_realloc) {
+  if (err == CborErrorOutOfMemory) {
     err = realloc_buffer(oc_rep_encoder_get_extra_bytes_needed(encoder));
     if (err != CborNoError) {
       return err;
@@ -1231,7 +1256,7 @@ oc_rep_encode_double(CborEncoder *encoder, double value)
   CborEncoder prevEncoder;
   memcpy(&prevEncoder, encoder, sizeof(prevEncoder));
   CborError err = oc_rep_encode_double_internal(encoder, value);
-  if (err == CborErrorOutOfMemory && g_enable_realloc) {
+  if (err == CborErrorOutOfMemory) {
     err = realloc_buffer(oc_rep_encoder_get_extra_bytes_needed(encoder));
     if (err != CborNoError) {
       return err;
@@ -1261,7 +1286,7 @@ oc_rep_encode_boolean(CborEncoder *encoder, bool value)
   CborEncoder prevEncoder;
   memcpy(&prevEncoder, encoder, sizeof(prevEncoder));
   CborError err = oc_rep_encode_boolean_internal(encoder, value);
-  if (err == CborErrorOutOfMemory && g_enable_realloc) {
+  if (err == CborErrorOutOfMemory) {
     err = realloc_buffer(oc_rep_encoder_get_extra_bytes_needed(encoder));
     if (err != CborNoError) {
       return err;
@@ -1291,7 +1316,7 @@ oc_rep_encode_int(CborEncoder *encoder, int64_t value)
   CborEncoder prevEncoder;
   memcpy(&prevEncoder, encoder, sizeof(prevEncoder));
   CborError err = oc_rep_encode_int_internal(encoder, value);
-  if (err == CborErrorOutOfMemory && g_enable_realloc) {
+  if (err == CborErrorOutOfMemory) {
     err = realloc_buffer(oc_rep_encoder_get_extra_bytes_needed(encoder));
     if (err != CborNoError) {
       return err;
@@ -1321,7 +1346,7 @@ oc_rep_encode_uint(CborEncoder *encoder, uint64_t value)
   CborEncoder prevEncoder;
   memcpy(&prevEncoder, encoder, sizeof(prevEncoder));
   CborError err = oc_rep_encode_uint_internal(encoder, value);
-  if (err == CborErrorOutOfMemory && g_enable_realloc) {
+  if (err == CborErrorOutOfMemory) {
     err = realloc_buffer(oc_rep_encoder_get_extra_bytes_needed(encoder));
     if (err != CborNoError) {
       return err;
@@ -1353,7 +1378,7 @@ oc_rep_encode_byte_string(CborEncoder *encoder, const uint8_t *string,
   CborEncoder prevEncoder;
   memcpy(&prevEncoder, encoder, sizeof(prevEncoder));
   CborError err = oc_rep_encode_byte_string_internal(encoder, string, length);
-  if (err == CborErrorOutOfMemory && g_enable_realloc) {
+  if (err == CborErrorOutOfMemory) {
     err = realloc_buffer(oc_rep_encoder_get_extra_bytes_needed(encoder));
     if (err != CborNoError) {
       return err;
@@ -1390,7 +1415,7 @@ oc_rep_encoder_create_array(CborEncoder *encoder, CborEncoder *arrayEncoder,
   memcpy(&prevArrayEncoder, arrayEncoder, sizeof(prevArrayEncoder));
   CborError err =
     oc_rep_encoder_create_array_internal(encoder, arrayEncoder, length);
-  if (err == CborErrorOutOfMemory && g_enable_realloc) {
+  if (err == CborErrorOutOfMemory) {
     err = realloc_buffer(oc_rep_encoder_get_extra_bytes_needed(arrayEncoder));
     if (err != CborNoError) {
       return err;
@@ -1423,7 +1448,7 @@ oc_rep_encode_floating_point(CborEncoder *encoder, CborType fpType,
   CborEncoder prevEncoder;
   memcpy(&prevEncoder, encoder, sizeof(prevEncoder));
   CborError err = oc_rep_encode_floating_point_internal(encoder, fpType, value);
-  if (err == CborErrorOutOfMemory && g_enable_realloc) {
+  if (err == CborErrorOutOfMemory) {
     err = realloc_buffer(oc_rep_encoder_get_extra_bytes_needed(encoder));
     if (err != CborNoError) {
       return err;

@@ -102,7 +102,7 @@ void newBuffer(int size) {
     deleteBuffer();
   }
   g_new_rep_buffer = (uint8_t *)malloc(size);
-  oc_rep_new(&g_new_rep_buffer, size, false);
+  oc_rep_new(g_new_rep_buffer, size);
   g_rep_objects.size = sizeof(oc_rep_t);
   g_rep_objects.num = 0;
   g_rep_objects.count = NULL;

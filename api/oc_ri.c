@@ -1095,7 +1095,11 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
      * points to memory allocated in the messaging layer for the "CoAP
      * Transaction" to service this request.
      */
-    oc_rep_new(&response_buffer.buffer, response_buffer.buffer_size, true);
+#ifdef OC_DYNAMIC_ALLOCATION
+    oc_rep_new_realloc(&response_buffer.buffer, response_buffer.buffer_size);
+#else  /* OC_DYNAMIC_ALLOCATION */
+    oc_rep_new(response_buffer.buffer, response_buffer.buffer_size);
+#endif /* !OC_DYNAMIC_ALLOCATION */
 
 #ifdef OC_SECURITY
     /* If cur_resource is a coaps:// resource, then query ACL to check if

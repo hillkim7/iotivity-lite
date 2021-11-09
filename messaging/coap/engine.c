@@ -476,7 +476,7 @@ coap_receive(oc_message_t *msg)
                   }
                   uint32_t buffer_size = OC_MAX_APP_DATA_SIZE;
                   if (coap_get_header_size2(message, &buffer_size) &&
-                      buffer_size == 0) {
+                      (buffer_size == 0)) {
                     buffer_size = OC_MAX_APP_DATA_SIZE;
                   }
 
@@ -748,9 +748,6 @@ coap_receive(oc_message_t *msg)
           &msg->endpoint, client_cb);
         if (!response_buffer) {
           uint32_t buffer_size = OC_MAX_APP_DATA_SIZE;
-          if (coap_get_header_size2(msg, &buffer_size) && buffer_size == 0) {
-            buffer_size = OC_MAX_APP_DATA_SIZE;
-          }
           response_buffer = oc_blockwise_alloc_response_buffer(
             oc_string(client_cb->uri) + 1, oc_string_len(client_cb->uri) - 1,
             &msg->endpoint, client_cb->method, OC_BLOCKWISE_CLIENT,

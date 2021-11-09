@@ -35,15 +35,25 @@ extern CborEncoder g_encoder, root_map, links_array;
 extern int g_err;
 
 /**
- * Initialize the buffer used to hold the cbor encoded data
+ * Initialize the buffer used to hold the cbor encoded data with reallocation.
  *
  * Unlikely to be used by outside the IoTivity-lite library.
  *
  * @param[in] payload double pointer to payload buffer
  * @param[in] size size of the payload buffer
- * @param[in] allow_realloc enable realloc for payload buffer
  */
-void oc_rep_new(uint8_t **payload, int size, bool allow_realloc);
+void oc_rep_new_realloc(uint8_t **payload, int size);
+
+/**
+ * Initialize the buffer used to hold the cbor encoded data without
+ * reallocation.
+ *
+ * Unlikely to be used by outside the IoTivity-lite library.
+ *
+ * @param[in] payload pointer to payload buffer
+ * @param[in] size size of the payload buffer
+ */
+void oc_rep_new(uint8_t *payload, int size);
 
 /**
  * Get the size of the cbor encoded data.
@@ -331,7 +341,8 @@ CborError oc_rep_encode_floating_point(CborEncoder *encoder, CborType fpType,
  */
 #define oc_rep_begin_array(parent, name)                                       \
   do {                                                                         \
-    CborEncoder name##_array = { 0 };                                          \
+    CborEncoder name##_array;                                                  \
+    memset(&name##_array, 0, sizeof(name##_array));                            \
   g_err |=                                                                     \
     oc_rep_encoder_create_array(parent, &name##_array, CborIndefiniteLength)
 
@@ -656,7 +667,8 @@ CborError oc_rep_encode_floating_point(CborEncoder *encoder, CborType fpType,
 
 #define oc_rep_begin_object(parent, key)                                       \
   do {                                                                         \
-    CborEncoder key##_map = { 0 };                                             \
+    CborEncoder key##_map;                                                     \
+    memset(&key##_map, 0, sizeof(key##_map));                                  \
   g_err |= oc_rep_encoder_create_map(parent, &key##_map, CborIndefiniteLength)
 
 #define oc_rep_end_object(parent, key)                                         \
@@ -798,7 +810,8 @@ CborError oc_rep_encode_floating_point(CborEncoder *encoder, CborType fpType,
 #define oc_rep_set_int_array(object, key, values, length)                      \
   do {                                                                         \
     g_err |= oc_rep_encode_text_string(&object##_map, #key, strlen(#key));     \
-    CborEncoder key##_value_array = { 0 };                                     \
+    CborEncoder key##_value_array;                                             \
+    memset(&key##_value_array, 0, sizeof(key##_value_array));                  \
     g_err |=                                                                   \
       oc_rep_encoder_create_array(&object##_map, &key##_value_array, length);  \
     int i;                                                                     \
@@ -836,7 +849,8 @@ CborError oc_rep_encode_floating_point(CborEncoder *encoder, CborType fpType,
 #define oc_rep_set_bool_array(object, key, values, length)                     \
   do {                                                                         \
     g_err |= oc_rep_encode_text_string(&object##_map, #key, strlen(#key));     \
-    CborEncoder key##_value_array = { 0 };                                     \
+    CborEncoder key##_value_array;                                             \
+    memset(&key##_value_array, 0, sizeof(key##_value_array));                  \
     g_err |=                                                                   \
       oc_rep_encoder_create_array(&object##_map, &key##_value_array, length);  \
     int i;                                                                     \
@@ -875,7 +889,8 @@ CborError oc_rep_encode_floating_point(CborEncoder *encoder, CborType fpType,
 #define oc_rep_set_double_array(object, key, values, length)                   \
   do {                                                                         \
     g_err |= oc_rep_encode_text_string(&object##_map, #key, strlen(#key));     \
-    CborEncoder key##_value_array = { 0 };                                     \
+    CborEncoder key##_value_array;                                             \
+    memset(&key##_value_array, 0, sizeof(key##_value_array));                  \
     g_err |=                                                                   \
       oc_rep_encoder_create_array(&object##_map, &key##_value_array, length);  \
     int i;                                                                     \
@@ -937,7 +952,8 @@ CborError oc_rep_encode_floating_point(CborEncoder *encoder, CborType fpType,
 #define oc_rep_set_string_array(object, key, values)                           \
   do {                                                                         \
     g_err |= oc_rep_encode_text_string(&object##_map, #key, strlen(#key));     \
-    CborEncoder key##_value_array = { 0 };                                     \
+    CborEncoder key##_value_array;                                             \
+    memset(&key##_value_array, 0, sizeof(key##_value_array));                  \
     g_err |= oc_rep_encoder_create_array(&object##_map, &key##_value_array,    \
                                          CborIndefiniteLength);                \
     int i;                                                                     \

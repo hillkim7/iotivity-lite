@@ -537,9 +537,9 @@ void
 oc_set_separate_response_buffer(oc_separate_response_t *handle)
 {
 #ifdef OC_BLOCK_WISE
-  oc_rep_new((uint8_t **)&handle->buffer, OC_MAX_APP_DATA_SIZE, false);
+  oc_rep_new(handle->buffer, OC_MAX_APP_DATA_SIZE);
 #else  /* OC_BLOCK_WISE */
-  oc_rep_new((uint8_t **)&handle->buffer, OC_BLOCK_SIZE, false);
+  oc_rep_new(handle->buffer, OC_BLOCK_SIZE);
 #endif /* !OC_BLOCK_WISE */
 }
 

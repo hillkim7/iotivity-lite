@@ -257,8 +257,11 @@ oc_obt_dump_state(void)
   uint8_t *buf = malloc(OC_MIN_APP_DATA_SIZE);
   if (!buf)
     return;
-
-  oc_rep_new(&buf, OC_MIN_APP_DATA_SIZE, true);
+#ifdef OC_DYNAMIC_ALLOCATION
+  oc_rep_new_realloc(&buf, OC_MIN_APP_DATA_SIZE);
+#else  /* OC_DYNAMIC_ALLOCATION */
+  oc_rep_new(buf, OC_MIN_APP_DATA_SIZE);
+#endif /* !OC_DYNAMIC_ALLOCATION */
   oc_rep_start_root_object();
 #ifdef OC_PKI
   oc_rep_set_byte_string(root, private_key, private_key, private_key_size);

@@ -33,8 +33,7 @@ TEST(TestRep, OCRepEncodedPayloadSizeTooSmall)
 {
   /* buffer for oc_rep_t */
   uint8_t buf[10]; // Purposely small buffer
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 10, false);
+  oc_rep_new(&buf[0], 10);
 
   oc_rep_start_root_object();
   EXPECT_EQ(CborNoError, oc_rep_get_cbor_errno());
@@ -67,8 +66,7 @@ TEST(TestRep, OCRepSetGetDouble)
 
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add int values to root object */
   oc_rep_start_root_object();
@@ -118,8 +116,7 @@ TEST(TestRep, OCRepSetGetInt)
 
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add values to root object */
   oc_rep_start_root_object();
@@ -192,8 +189,7 @@ TEST(TestRep, OCRepSetGetUint)
 
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add values to root object */
   oc_rep_start_root_object();
@@ -269,8 +265,7 @@ TEST(TestRep, OCRepSetGetBool)
 
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add values to root object */
   oc_rep_start_root_object();
@@ -344,8 +339,7 @@ TEST(TestRep, OCRepSetGetTextString)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add text string value "hal9000":"Dave" to root object */
   oc_rep_start_root_object();
@@ -422,8 +416,7 @@ TEST(TestRep, OCRepSetGetByteString)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add text string value "hal9000":"Dave" to root object */
   oc_rep_start_root_object();
@@ -501,8 +494,7 @@ TEST(TestRep, OCRepSetGetIntArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add values to root object */
   oc_rep_start_root_object();
@@ -572,8 +564,7 @@ TEST(TestRep, OCRepAddGetIntArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add values to root object */
   oc_rep_start_root_object();
@@ -641,8 +632,7 @@ TEST(TestRep, OCRepAddGetIntArrayUsingSetKeyAndBeginArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add values to root object */
   oc_rep_start_root_object();
@@ -708,8 +698,7 @@ TEST(TestRep, OCRepSetGetBoolArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add values to root object */
   oc_rep_start_root_object();
@@ -777,8 +766,7 @@ TEST(TestRep, OCRepAddGetBoolArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add values to root object */
   oc_rep_start_root_object();
@@ -842,8 +830,7 @@ TEST(TestRep, OCRepSetGetDoubleArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add values to root object */
   oc_rep_start_root_object();
@@ -921,8 +908,7 @@ TEST(TestRep, OCRepAddGetDoubleArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* add values to root object */
   oc_rep_start_root_object();
@@ -991,8 +977,7 @@ TEST(TestRep, OCRepSetGetObject)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /*
    * {
@@ -1076,8 +1061,7 @@ TEST(TestRep, OCRepSetGetObjectArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /*
    * {
@@ -1222,8 +1206,7 @@ TEST(TestRep, OCRepAddGetByteStringArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* jagged arrays for testing */
   uint8_t ba1[] = { 0x01, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
@@ -1322,8 +1305,7 @@ TEST(TestRep, OCRepSetGetStringArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* Strings for testing */
   const char *str0 =
@@ -1412,8 +1394,7 @@ TEST(TestRep, OCRepAddGetStringArray)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /* Strings for testing */
   const char *str0 =
@@ -1505,8 +1486,7 @@ TEST(TestRep, OCRepRootArrayObject)
 {
   /*buffer for oc_rep_t */
   uint8_t buf[1024];
-  uint8_t *b = &buf[0];
-  oc_rep_new(&b, 1024, false);
+  oc_rep_new(&buf[0], 1024);
 
   /*
    * create root object array
@@ -1630,7 +1610,7 @@ TEST(TestRep, OCRepEncodedPayloadRealloc)
 {
   /* buffer for oc_rep_t */
   uint8_t *b = (uint8_t *)malloc(0);
-  oc_rep_new(&b, 0, true);
+  oc_rep_new_realloc(&b, 0);
   oc_rep_start_root_object();
   EXPECT_EQ(CborNoError, oc_rep_get_cbor_errno());
   oc_rep_set_text_string(root, "hello", "world");
