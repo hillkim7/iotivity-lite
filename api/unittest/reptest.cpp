@@ -1644,6 +1644,9 @@ TEST(TestRep, OCRepEncodedPayloadRealloc)
     (int)(sizeof(math_constants) / sizeof(math_constants[0])));
   EXPECT_EQ(CborNoError, oc_rep_get_cbor_errno());
   oc_rep_end_root_object();
+  uint8_t *old_b = buf;
+  b = oc_rep_shrink_encoder_buf(b);
+  EXPECT_NEQ(old_b, b);
   EXPECT_EQ(CborNoError, oc_rep_get_cbor_errno());
   EXPECT_EQ(166, oc_rep_get_encoded_payload_size());
   free(b);

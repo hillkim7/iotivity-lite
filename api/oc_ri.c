@@ -905,9 +905,7 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
    * oc_parse_rep()
    *  in order to reducing peak memory in OC_BLOCK_WISE & OC_DYNAMIC_ALLOCATION
    */
-  response_buffer.code = 0;
-  response_buffer.response_length = 0;
-  response_buffer.content_format = 0;
+  memset(&response_buffer, 0, sizeof(response_buffer));
 
   response_obj.separate_response = NULL;
   response_obj.response_buffer = &response_buffer;
@@ -1062,6 +1060,10 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
 /* Alloc response_state. It also affects request_obj.response.
  */
 #ifdef OC_BLOCK_WISE
+#ifdef OC_DYNAMIC_ALLOCATION
+  bool response_state_allocated = false;
+  bool rep_realloc_created = false;
+#endif /* OC_DYNAMIC_ALLOCATION */
   if (cur_resource && !bad_request) {
     if (!(*response_state)) {
       OC_DBG("creating new block-wise response state");
@@ -1072,6 +1074,9 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
         OC_ERR("failure to alloc response state");
         bad_request = true;
       } else {
+#ifdef OC_DYNAMIC_ALLOCATION
+        response_state_allocated = true;
+#endif /* OC_DYNAMIC_ALLOCATION */
         if (uri_query_len > 0) {
           oc_new_string(&(*response_state)->uri_query, uri_query,
                         uri_query_len);
@@ -1096,7 +1101,12 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
      * Transaction" to service this request.
      */
 #ifdef OC_DYNAMIC_ALLOCATION
-    oc_rep_new_realloc(&response_buffer.buffer, response_buffer.buffer_size);
+    if (response_state_allocated) {
+      oc_rep_new_realloc(&response_buffer.buffer, response_buffer.buffer_size);
+      rep_realloc_created = true;
+    } else {
+      oc_rep_new(response_buffer.buffer, response_buffer.buffer_size);
+    }
 #else  /* OC_DYNAMIC_ALLOCATION */
     oc_rep_new(response_buffer.buffer, response_buffer.buffer_size);
 #endif /* !OC_DYNAMIC_ALLOCATION */
@@ -1147,8 +1157,11 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
   *request_state = NULL;
 #ifdef OC_DYNAMIC_ALLOCATION
   // for realloc we need reassign memory again.
-  if (response_state && (*response_state)) {
-    (*response_state)->buffer = response_buffer.buffer;
+  if (rep_realloc_created) {
+    response_buffer.buffer = oc_rep_shrink_encoder_buf(response_buffer.buffer);
+    if (response_state && (*response_state)) {
+      (*response_state)->buffer = response_buffer.buffer;
+    }
   }
 #endif
 #endif

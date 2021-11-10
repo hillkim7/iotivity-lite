@@ -113,6 +113,9 @@ oc_dump_sw(size_t device)
 #endif /* !OC_DYNAMIC_ALLOCATION */
 
   oc_swupdate_encode(OC_IF_RW, device);
+#ifdef OC_DYNAMIC_ALLOCATION
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* OC_DYNAMIC_ALLOCATION */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_store: encoded pstat size %d", size);

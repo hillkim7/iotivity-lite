@@ -457,6 +457,9 @@ coap_notify_collection_baseline(oc_collection_t *collection)
   request.resource = (oc_resource_t *)collection;
 
   oc_handle_collection_request(OC_GET, &request, OC_IF_BASELINE, NULL);
+#ifdef OC_DYNAMIC_ALLOCATION
+  response_buffer.buffer = oc_rep_shrink_encoder_buf(response_buffer.buffer);
+#endif
   coap_notify_collection_observers(request.resource, &response_buffer,
                                    OC_IF_BASELINE);
 
@@ -500,6 +503,9 @@ coap_notify_collection_batch(oc_collection_t *collection)
   request.resource = (oc_resource_t *)collection;
 
   oc_handle_collection_request(OC_GET, &request, OC_IF_B, NULL);
+#ifdef OC_DYNAMIC_ALLOCATION
+  response_buffer.buffer = oc_rep_shrink_encoder_buf(response_buffer.buffer);
+#endif
   coap_notify_collection_observers(request.resource, &response_buffer, OC_IF_B);
 
 #ifdef OC_DYNAMIC_ALLOCATION
@@ -543,6 +549,9 @@ coap_notify_collection_links_list(oc_collection_t *collection)
   request.resource = (oc_resource_t *)collection;
 
   oc_handle_collection_request(OC_GET, &request, OC_IF_LL, NULL);
+#ifdef OC_DYNAMIC_ALLOCATION
+  response_buffer.buffer = oc_rep_shrink_encoder_buf(response_buffer.buffer);
+#endif
   coap_notify_collection_observers(request.resource, &response_buffer,
                                    OC_IF_LL);
 
@@ -730,6 +739,9 @@ coap_notify_observers(oc_resource_t *resource,
         goto leave_notify_observers;
       } // response_buf->code == OC_IGNORE
     }   //! response_buf && resource
+#ifdef OC_DYNAMIC_ALLOCATION
+    response_buffer.buffer = oc_rep_shrink_encoder_buf(response_buffer.buffer);
+#endif
 
     /* iterate over observers */
     obs = (coap_observer_t *)oc_list_head(observers_list);
@@ -958,6 +970,9 @@ notify_resource_defaults_observer(oc_resource_t *resource,
 #endif /* !OC_DYNAMIC_ALLOCATION */
   resource->get_handler.cb(&request, iface_mask,
                            resource->get_handler.user_data);
+#ifdef OC_DYNAMIC_ALLOCATION
+  response_buffer.buffer = oc_rep_shrink_encoder_buf(response_buffer.buffer);
+#endif
   response_buf = &response_buffer;
   if (response_buf->code == OC_IGNORE) {
     OC_DBG("coap_notify_observers: Resource ignored request");

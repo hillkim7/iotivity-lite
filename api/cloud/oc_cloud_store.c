@@ -132,6 +132,9 @@ cloud_store_dump_internal(const char *store_name, const oc_cloud_store_t *store)
 
   // Dumping cloud and accesspoint information.
   cloud_store_encode(store);
+#ifdef OC_DYNAMIC_ALLOCATION
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* OC_DYNAMIC_ALLOCATION */
   long size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     size = oc_storage_write(store_name, buf, size);

@@ -137,7 +137,7 @@ oc_rep_new_realloc(uint8_t **out_payload, int size)
   g_err = CborNoError;
   g_enable_realloc = true;
   g_buf_size = size;
-  g_buf = (uint8_t **)out_payload;
+  g_buf = out_payload;
   cbor_encoder_init(&g_encoder, *out_payload, size, 0);
   convert_ptr_to_offset(&g_encoder);
 }
@@ -153,6 +153,30 @@ const uint8_t *
 oc_rep_get_encoder_buf(void)
 {
   return get_g_buf();
+}
+
+uint8_t *
+oc_rep_shrink_encoder_buf(uint8_t *buf)
+{
+#ifndef OC_DYNAMIC_ALLOCATION
+  return buf;
+#else
+  if (!g_enable_realloc || !buf || !g_buf || buf != *g_buf)
+    return buf;
+  int size = oc_rep_get_encoded_payload_size();
+  if (size < 0) {
+    return buf;
+  }
+  uint8_t *tmp = (uint8_t *)realloc(buf, size);
+  if (tmp == NULL && size > 0) {
+    return buf;
+  }
+  OC_DBG("cbor encoder buffer was shrinked from %d to %d", (int)g_buf_size,
+         size);
+  g_buf_size = (size_t)size;
+  *g_buf = tmp;
+  return tmp;
+#endif
 }
 
 void

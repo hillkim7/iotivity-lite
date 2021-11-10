@@ -274,6 +274,9 @@ oc_obt_dump_state(void)
 #endif /* OC_OSCORE */
   oc_rep_end_root_object();
 
+#ifdef OC_DYNAMIC_ALLOCATION
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* OC_DYNAMIC_ALLOCATION */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_obt: dumped current state: size %d", size);

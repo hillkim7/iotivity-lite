@@ -195,7 +195,11 @@ oc_sec_dump_sp(size_t device)
 #else  /* !OC_APP_DATA_STORAGE_BUFFER */
   oc_rep_new(buf, OC_MIN_APP_DATA_SIZE);
 #endif /* OC_APP_DATA_STORAGE_BUFFER */
+
   oc_sec_encode_sp(device, 0, true);
+#ifndef OC_APP_DATA_STORAGE_BUFFER
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* !OC_APP_DATA_STORAGE_BUFFER */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_store: encoded sp size %d", size);
@@ -272,6 +276,9 @@ oc_sec_dump_ecdsa_keypair(size_t device)
 #endif /* OC_APP_DATA_STORAGE_BUFFER */
 
   oc_sec_encode_ecdsa_keypair(device);
+#ifndef OC_APP_DATA_STORAGE_BUFFER
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* !OC_APP_DATA_STORAGE_BUFFER */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_store: encoded sp size %d", size);
@@ -376,6 +383,9 @@ oc_sec_dump_pstat(size_t device)
 #endif /* OC_APP_DATA_STORAGE_BUFFER */
 
   oc_sec_encode_pstat(device, 0, true);
+#ifndef OC_APP_DATA_STORAGE_BUFFER
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* !OC_APP_DATA_STORAGE_BUFFER */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_store: encoded pstat size %d", size);
@@ -402,6 +412,9 @@ oc_sec_dump_cred(size_t device)
 #endif /* OC_APP_DATA_STORAGE_BUFFER */
 
   oc_sec_encode_cred(true, device, 0, true);
+#ifndef OC_APP_DATA_STORAGE_BUFFER
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* !OC_APP_DATA_STORAGE_BUFFER */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_store: encoded cred size %d", size);
@@ -428,6 +441,9 @@ oc_sec_dump_doxm(size_t device)
 #endif /* OC_APP_DATA_STORAGE_BUFFER */
 
   oc_sec_encode_doxm(device, 0, true);
+#ifndef OC_APP_DATA_STORAGE_BUFFER
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* !OC_APP_DATA_STORAGE_BUFFER */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_store: encoded doxm size %d", size);
@@ -454,6 +470,9 @@ oc_sec_dump_acl(size_t device)
 #endif /* OC_APP_DATA_STORAGE_BUFFER */
 
   oc_sec_encode_acl(device, 0, true);
+#ifndef OC_APP_DATA_STORAGE_BUFFER
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* !OC_APP_DATA_STORAGE_BUFFER */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_store: encoded ACL size %d", size);
@@ -552,6 +571,9 @@ oc_sec_dump_unique_ids(size_t device)
   oc_rep_set_text_string(root, piid, piid);
   oc_rep_end_root_object();
 
+#ifndef OC_APP_DATA_STORAGE_BUFFER
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* !OC_APP_DATA_STORAGE_BUFFER */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_store: encoded unique identifiers: size %d", size);
@@ -579,6 +601,9 @@ oc_sec_dump_ael(size_t device)
 
   /* ael */
   oc_sec_ael_encode(device, 0, true);
+#ifndef OC_APP_DATA_STORAGE_BUFFER
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* !OC_APP_DATA_STORAGE_BUFFER */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_store: encoded ael size %d", size);
@@ -686,6 +711,9 @@ oc_sec_dump_sdi(size_t device)
 
   /* sdi */
   oc_sec_encode_sdi(device, true);
+#ifndef OC_APP_DATA_STORAGE_BUFFER
+  buf = oc_rep_shrink_encoder_buf(buf);
+#endif /* !OC_APP_DATA_STORAGE_BUFFER */
   int size = oc_rep_get_encoded_payload_size();
   if (size > 0) {
     OC_DBG("oc_store: encoded sdi size %d", size);

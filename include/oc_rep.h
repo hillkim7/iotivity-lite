@@ -83,6 +83,20 @@ int oc_rep_get_encoded_payload_size(void);
 const uint8_t *oc_rep_get_encoder_buf(void);
 
 /**
+ * Shrink the buffer pointer to length of encoded cbor data.
+ *
+ * This is used when parsing the encoded cbor data to an oc_rep_t. It is
+ * unlikely
+ * to be used outside the IoTivity-lite library.
+ *
+ * @param[in] buf pointer to cbor encoded buffer
+ * @return pointer to the start of the shrinked cbor encoded buffer
+ *
+ * @see oc_parse_rep
+ */
+uint8_t *oc_rep_shrink_encoder_buf(uint8_t *buf);
+
+/**
  * @brief Encode raw data, as if it was already encoded.
  *
  * @param data Pointer to data to be encoded. Will be copied into the global
