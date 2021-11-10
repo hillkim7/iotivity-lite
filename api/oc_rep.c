@@ -93,7 +93,7 @@ realloc_buffer(size_t needed)
     return CborErrorOutOfMemory;
   }
   // preallocate buffer to avoid reallocation
-  if (2 * (g_buf_size + needed) < (size_t)OC_MAX_APP_DATA_SIZE) {
+  if (2 * (g_buf_size + needed) < (size_t)(OC_MAX_APP_DATA_SIZE/4)) {
     needed += g_buf_size + needed;
   } else {
     needed = (size_t)OC_MAX_APP_DATA_SIZE - g_buf_size;
