@@ -27,25 +27,11 @@
 static struct oc_memb *rep_objects;
 CborEncoder g_encoder, root_map, links_array;
 CborError g_err;
+static uint8_t *g_buf;
 #ifdef OC_DYNAMIC_ALLOCATION
 static bool g_enable_realloc;
 static size_t g_buf_size;
-static uint8_t **g_buf;
-static uint8_t *
-get_g_buf()
-{
-  if (!g_enable_realloc) {
-    return (uint8_t *)g_buf;
-  }
-  return g_buf ? *g_buf : NULL;
-}
-#else
-static uint8_t *g_buf;
-static uint8_t *
-get_g_buf()
-{
-  return g_buf;
-}
+static uint8_t **g_buf_ptr;
 #endif
 
 static CborEncoder *
@@ -54,12 +40,11 @@ convert_offset_to_ptr(CborEncoder *encoder)
   if (!encoder || (encoder->data.ptr && !encoder->end)) {
     return encoder;
   }
-  uint8_t *ptr = get_g_buf();
-  encoder->data.ptr = ptr + (intptr_t)encoder->data.ptr;
+  encoder->data.ptr = g_buf + (intptr_t)encoder->data.ptr;
 #ifdef OC_DYNAMIC_ALLOCATION
-  encoder->end = ptr ? ptr + g_buf_size : NULL;
+  encoder->end = g_buf ? g_buf + g_buf_size : NULL;
 #else
-  encoder->end = ptr + (intptr_t)encoder->end;
+  encoder->end = g_buf + (intptr_t)encoder->end;
 #endif
   return encoder;
 }
@@ -70,9 +55,8 @@ convert_ptr_to_offset(CborEncoder *encoder)
   if (!encoder || (encoder->data.ptr && !encoder->end)) {
     return encoder;
   }
-  uint8_t *ptr = get_g_buf();
-  encoder->data.ptr = (uint8_t *)(encoder->data.ptr - ptr);
-  encoder->end = (uint8_t *)(encoder->end - ptr);
+  encoder->data.ptr = (uint8_t *)(encoder->data.ptr - g_buf);
+  encoder->end = (uint8_t *)(encoder->end - g_buf);
   return encoder;
 }
 
@@ -93,16 +77,17 @@ realloc_buffer(size_t needed)
     return CborErrorOutOfMemory;
   }
   // preallocate buffer to avoid reallocation
-  if (2 * (g_buf_size + needed) < (size_t)(OC_MAX_APP_DATA_SIZE/4)) {
+  if (2 * (g_buf_size + needed) < (size_t)(OC_MAX_APP_DATA_SIZE / 4)) {
     needed += g_buf_size + needed;
   } else {
     needed = (size_t)OC_MAX_APP_DATA_SIZE - g_buf_size;
   }
-  uint8_t *tmp = (uint8_t *)realloc(*g_buf, g_buf_size + needed);
+  uint8_t *tmp = (uint8_t *)realloc(*g_buf_ptr, g_buf_size + needed);
   if (tmp == NULL) {
     return CborErrorOutOfMemory;
   }
-  *g_buf = tmp;
+  *g_buf_ptr = tmp;
+  g_buf = tmp;
   g_buf_size = g_buf_size + needed;
   return CborNoError;
 }
@@ -119,12 +104,11 @@ void
 oc_rep_new(uint8_t *out_payload, int size)
 {
   g_err = CborNoError;
+  g_buf = out_payload;
 #ifdef OC_DYNAMIC_ALLOCATION
   g_enable_realloc = false;
   g_buf_size = size;
-  g_buf = (uint8_t **)out_payload;
-#else
-  g_buf = out_payload;
+  g_buf_ptr = NULL;
 #endif
   cbor_encoder_init(&g_encoder, out_payload, size, 0);
   convert_ptr_to_offset(&g_encoder);
@@ -137,8 +121,9 @@ oc_rep_new_realloc(uint8_t **out_payload, int size)
   g_err = CborNoError;
   g_enable_realloc = true;
   g_buf_size = size;
-  g_buf = out_payload;
-  cbor_encoder_init(&g_encoder, *out_payload, size, 0);
+  g_buf_ptr = out_payload;
+  g_buf = *out_payload;
+  cbor_encoder_init(&g_encoder, g_buf, size, 0);
   convert_ptr_to_offset(&g_encoder);
 }
 #endif /* OC_DYNAMIC_ALLOCATION */
@@ -152,7 +137,7 @@ oc_rep_get_cbor_errno(void)
 const uint8_t *
 oc_rep_get_encoder_buf(void)
 {
-  return get_g_buf();
+  return g_buf;
 }
 
 uint8_t *
@@ -161,7 +146,7 @@ oc_rep_shrink_encoder_buf(uint8_t *buf)
 #ifndef OC_DYNAMIC_ALLOCATION
   return buf;
 #else
-  if (!g_enable_realloc || !buf || !g_buf || buf != *g_buf)
+  if (!g_enable_realloc || !buf || !g_buf_ptr || buf != g_buf)
     return buf;
   int size = oc_rep_get_encoded_payload_size();
   if (size < 0) {
@@ -174,7 +159,8 @@ oc_rep_shrink_encoder_buf(uint8_t *buf)
   OC_DBG("cbor encoder buffer was shrinked from %d to %d", (int)g_buf_size,
          size);
   g_buf_size = (size_t)size;
-  *g_buf = tmp;
+  *g_buf_ptr = tmp;
+  g_buf = tmp;
   return tmp;
 #endif
 }
@@ -216,9 +202,8 @@ oc_rep_encode_raw(const uint8_t *data, size_t len)
 int
 oc_rep_get_encoded_payload_size(void)
 {
-  uint8_t *buf = get_g_buf();
   convert_offset_to_ptr(&g_encoder);
-  size_t size = cbor_encoder_get_buffer_size(&g_encoder, buf);
+  size_t size = cbor_encoder_get_buffer_size(&g_encoder, g_buf);
 #ifdef OC_DEBUG
   size_t needed = cbor_encoder_get_extra_bytes_needed(&g_encoder);
 #endif
