@@ -46,6 +46,34 @@ static oc_sec_pstat_t *pstat;
 static oc_sec_pstat_t pstat[OC_MAX_NUM_DEVICES];
 #endif /* !OC_DYNAMIC_ALLOCATION */
 
+// ECHOMNET_MODIFIED
+static const char* pstat_dos_name(const oc_dostype_t s)
+{
+  static const char* dos_names[] = {
+    "RESET",
+    "RFOTM",
+    "RFPRO",
+    "RFNOP",
+    "SRESET",
+  };
+ return dos_names[s];
+}
+
+void ocf_show()
+{
+  char uuid[OC_UUID_LEN + 1] = { 0, };
+  oc_device_info_t *dinfo = oc_core_get_device_info(0);
+  oc_sec_pstat_t* pstat = oc_sec_get_pstat(0);
+
+  oc_uuid_to_str(&dinfo->di, uuid, OC_UUID_LEN);
+  printf("device UUID: %s\n", uuid);
+  oc_uuid_to_str(&dinfo->piid, uuid, OC_UUID_LEN);
+  printf("device PIID: %s\n", uuid);
+  printf("dostype: %d[%s]\n", pstat->s, pstat_dos_name(pstat->s));
+  oc_uuid_to_str(&pstat->rowneruuid, uuid, OC_UUID_LEN);
+  printf("rowneruuid: %s\n", uuid);
+}
+
 void
 oc_sec_pstat_free(void)
 {
