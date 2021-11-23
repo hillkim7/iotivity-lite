@@ -218,7 +218,7 @@ oc_get_collection_by_uri(const char *uri_path, size_t uri_path_len,
     uri_path++;
     uri_path_len--;
   }
-  oc_collection_t *collection = oc_list_head(oc_collections);
+  oc_resource_t *collection = (oc_resource_t *)oc_list_head(oc_collections);
   while (collection != NULL) {
     if (oc_string_len(collection->uri) == (uri_path_len + 1) &&
         strncmp(oc_string(collection->uri) + 1, uri_path, uri_path_len) == 0 &&
@@ -226,7 +226,7 @@ oc_get_collection_by_uri(const char *uri_path, size_t uri_path_len,
       break;
     collection = collection->next;
   }
-  return collection;
+  return (oc_collection_t *)collection;
 }
 
 oc_link_t *
@@ -259,9 +259,9 @@ oc_get_link_by_uri(oc_collection_t *collection, const char *uri_path,
 bool
 oc_check_if_collection(oc_resource_t *resource)
 {
-  oc_collection_t *collection = oc_list_head(oc_collections);
+  oc_resource_t *collection = (oc_resource_t *)oc_list_head(oc_collections);
   while (collection != NULL) {
-    if ((oc_collection_t *)resource == collection)
+    if (resource == collection)
       return true;
     collection = collection->next;
   }
@@ -391,10 +391,10 @@ oc_get_next_collection_with_link(oc_resource_t *resource,
   if (!collection) {
     collection = oc_collection_get_all();
   } else {
-    collection = collection->next;
+    collection = (oc_collection_t *)collection->res.next;
   }
 
-  while (collection && collection->device == resource->device) {
+  while (collection && collection->res.device == resource->device) {
     oc_link_t *link = (oc_link_t *)oc_list_head(collection->links);
     while (link) {
       if (link->resource == resource) {
@@ -402,7 +402,7 @@ oc_get_next_collection_with_link(oc_resource_t *resource,
       }
       link = link->next;
     }
-    collection = collection->next;
+    collection = (oc_collection_t *)collection->res.next;
   }
 
   return collection;
@@ -632,7 +632,9 @@ oc_handle_collection_request(oc_method_t method, oc_request_t *request,
             const char *desc =
               oc_enum_pos_desc_to_str(link->resource->tag_pos_desc);
             if (desc) {
+              // clang-format off
               oc_rep_set_text_string(links, tag-pos-desc, desc);
+              // clang-format on
             }
           }
 
@@ -640,7 +642,9 @@ oc_handle_collection_request(oc_method_t method, oc_request_t *request,
           if (link->resource->tag_func_desc > 0) {
             const char *func = oc_enum_to_str(link->resource->tag_func_desc);
             if (func) {
+              // clang-format off
               oc_rep_set_text_string(links, tag-func-desc, func);
+              // clang-format on
             }
           }
 
@@ -690,19 +694,19 @@ oc_handle_collection_request(oc_method_t method, oc_request_t *request,
         link = link->next;
       }
       oc_rep_close_array(root, links);
-      if (collection->get_properties.cb.get_props) {
-        collection->get_properties.cb.get_props(
+      if (collection->res.get_properties.cb.get_props) {
+        collection->res.get_properties.cb.get_props(
           (oc_resource_t *)collection, OC_IF_BASELINE,
-          collection->get_properties.user_data);
+          collection->res.get_properties.user_data);
       }
       oc_rep_end_root_object();
 
       pcode = ecode = oc_status_code(OC_STATUS_OK);
     } else if (method == OC_PUT || method == OC_POST) {
-      if (collection->set_properties.cb.set_props) {
-        collection->set_properties.cb.set_props(
+      if (collection->res.set_properties.cb.set_props) {
+        collection->res.set_properties.cb.set_props(
           (oc_resource_t *)collection, request->request_payload,
-          collection->set_properties.user_data);
+          collection->res.set_properties.user_data);
       }
     }
   } break;
@@ -733,7 +737,9 @@ oc_handle_collection_request(oc_method_t method, oc_request_t *request,
           const char *desc =
             oc_enum_pos_desc_to_str(link->resource->tag_pos_desc);
           if (desc) {
+            // clang-format off
             oc_rep_set_text_string(links, tag-pos-desc, desc);
+            // clang-format on
           }
         }
 
@@ -741,7 +747,9 @@ oc_handle_collection_request(oc_method_t method, oc_request_t *request,
         if (link->resource->tag_func_desc > 0) {
           const char *func = oc_enum_to_str(link->resource->tag_func_desc);
           if (func) {
+            // clang-format off
             oc_rep_set_text_string(links, tag-func-desc, func);
+            // clang-format on
           }
         }
 
@@ -919,6 +927,8 @@ oc_handle_collection_request(oc_method_t method, oc_request_t *request,
                     else
                       method_not_found = true;
                     break;
+                  default:
+                    break;
                   }
                 }
               }
@@ -990,10 +1000,12 @@ oc_handle_collection_request(oc_method_t method, oc_request_t *request,
     case OC_DELETE:
       code = oc_status_code(OC_STATUS_DELETED);
       break;
+    default:
+      break;
     }
   }
   request->response->response_buffer->content_format = APPLICATION_VND_OCF_CBOR;
-  request->response->response_buffer->response_length = (uint16_t)size;
+  request->response->response_buffer->response_length = size;
   request->response->response_buffer->code = code;
 
   if ((method == OC_PUT || method == OC_POST) &&
@@ -1001,6 +1013,9 @@ oc_handle_collection_request(oc_method_t method, oc_request_t *request,
     if (iface_mask == OC_IF_CREATE) {
       coap_notify_collection_observers(
         request->resource, request->response->response_buffer, iface_mask);
+#if defined(OC_RES_BATCH_SUPPORT) && defined(OC_DISCOVERY_RESOURCE_OBSERVABLE)
+      coap_notify_discovery_batch_observers(request->resource);
+#endif /* OC_RES_BATCH_SUPPORT && OC_DISCOVERY_RESOURCE_OBSERVABLE */
     } else if (iface_mask == OC_IF_B) {
       oc_set_delayed_callback(request->resource, batch_notify_collection, 0);
     }

@@ -36,6 +36,9 @@ oc_client_cb_t *client_cb;
 static oc_blockwise_state_t *request_buffer = NULL;
 #endif /* OC_BLOCK_WISE */
 
+#ifdef OC_OSCORE
+oc_message_t *multicast_update = NULL;
+#endif /* OC_OSCORE */
 oc_event_callback_retval_t oc_ri_remove_client_cb(void *data);
 
 static bool
@@ -128,7 +131,8 @@ prepare_coap_request(oc_client_cb_t *cb)
     type = COAP_TYPE_CON;
   }
 
-  transaction = coap_new_transaction(cb->mid, &cb->endpoint);
+  transaction =
+    coap_new_transaction(cb->mid, cb->token, cb->token_len, &cb->endpoint);
 
   if (!transaction) {
     return false;
@@ -185,6 +189,97 @@ prepare_coap_request(oc_client_cb_t *cb)
 
   return true;
 }
+
+#ifdef OC_OSCORE
+bool
+oc_do_multicast_update(void)
+{
+  int payload_size = oc_rep_get_encoded_payload_size();
+
+  if (payload_size > 0) {
+    coap_set_payload(request, multicast_update->data + COAP_MAX_HEADER_SIZE,
+                     payload_size);
+  } else {
+    goto do_multicast_update_error;
+  }
+
+  if (payload_size > 0) {
+    coap_set_header_content_format(request, APPLICATION_VND_OCF_CBOR);
+  }
+
+  multicast_update->length =
+    coap_serialize_message(request, multicast_update->data);
+  if (multicast_update->length > 0) {
+    oc_send_message(multicast_update);
+  } else {
+    goto do_multicast_update_error;
+  }
+
+#ifdef OC_IPV4
+  oc_message_t *multicast_update4 = oc_internal_allocate_outgoing_message();
+  if (multicast_update4) {
+    oc_make_ipv4_endpoint(mcast4, IPV4 | MULTICAST | SECURED, 5683, 0xe0, 0x00,
+                          0x01, 0xbb);
+
+    memcpy(&multicast_update4->endpoint, &mcast4, sizeof(oc_endpoint_t));
+
+    multicast_update4->length = multicast_update->length;
+    memcpy(multicast_update4->data, multicast_update->data,
+           multicast_update->length);
+
+    oc_send_message(multicast_update4);
+  }
+#endif /* OC_IPV4 */
+
+  multicast_update = NULL;
+  return true;
+do_multicast_update_error:
+  oc_message_unref(multicast_update);
+  multicast_update = NULL;
+  return false;
+}
+
+bool
+oc_init_multicast_update(const char *uri, const char *query)
+{
+  oc_make_ipv6_endpoint(mcast, IPV6 | MULTICAST | SECURED, 5683, 0xff, 0x02, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x58);
+  mcast.addr.ipv6.scope = 0;
+
+  coap_message_type_t type = COAP_TYPE_NON;
+
+  multicast_update = oc_internal_allocate_outgoing_message();
+
+  if (!multicast_update) {
+    return false;
+  }
+
+  memcpy(&multicast_update->endpoint, &mcast, sizeof(oc_endpoint_t));
+
+  oc_rep_new(multicast_update->data + COAP_MAX_HEADER_SIZE, OC_BLOCK_SIZE);
+
+  coap_udp_init_message(request, type, OC_POST, coap_get_mid());
+
+  coap_set_header_accept(request, APPLICATION_VND_OCF_CBOR);
+
+  request->token_len = 8;
+  int i = 0;
+  uint32_t r;
+  while (i < request->token_len) {
+    r = oc_random_value();
+    memcpy(request->token + i, &r, sizeof(r));
+    i += sizeof(r);
+  }
+
+  coap_set_header_uri_path(request, uri, strlen(uri));
+
+  if (query) {
+    coap_set_header_uri_query(request, query);
+  }
+
+  return true;
+}
+#endif /* OC_OSCORE */
 
 void
 oc_free_server_endpoints(oc_endpoint_t *endpoint)
@@ -532,15 +627,15 @@ oc_do_ip_multicast(const char *uri, const char *query,
 static bool
 dispatch_ip_discovery(oc_client_cb_t *cb4, const char *query,
                       oc_client_handler_t handler, oc_endpoint_t *endpoint,
-                      void *user_data)
+                      oc_qos_t qos, void *user_data)
 {
   if (!endpoint) {
     OC_ERR("require valid endpoint");
     return false;
   }
 
-  oc_client_cb_t *cb = oc_ri_alloc_client_cb(
-    "/oic/res", endpoint, OC_GET, query, handler, LOW_QOS, user_data);
+  oc_client_cb_t *cb = oc_ri_alloc_client_cb("/oic/res", endpoint, OC_GET,
+                                             query, handler, qos, user_data);
 
   if (cb) {
     cb->discovery = true;
@@ -576,7 +671,7 @@ multi_scope_ipv6_discovery(oc_client_cb_t *cb4, uint8_t scope,
   oc_make_ipv6_endpoint(mcast, IPV6 | DISCOVERY, 5683, 0xff, scope, 0, 0, 0, 0,
                         0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x58);
   mcast.addr.ipv6.scope = 0;
-  return dispatch_ip_discovery(cb4, query, handler, &mcast, user_data);
+  return dispatch_ip_discovery(cb4, query, handler, &mcast, LOW_QOS, user_data);
 }
 
 bool
@@ -680,7 +775,8 @@ oc_do_ip_discovery_all_at_endpoint(oc_discovery_all_handler_t handler,
   oc_client_handler_t handlers;
   handlers.discovery_all = handler;
   handlers.discovery = NULL;
-  return dispatch_ip_discovery(NULL, NULL, handlers, endpoint, user_data);
+  return dispatch_ip_discovery(NULL, NULL, handlers, endpoint, HIGH_QOS,
+                               user_data);
 }
 
 bool
@@ -696,7 +792,7 @@ oc_do_ip_discovery_at_endpoint(const char *rt, oc_discovery_handler_t handler,
     oc_concat_strings(&uri_query, "rt=", rt);
   }
   bool status = dispatch_ip_discovery(NULL, oc_string(uri_query), handlers,
-                                      endpoint, user_data);
+                                      endpoint, HIGH_QOS, user_data);
   oc_free_string(&uri_query);
 
   return status;

@@ -19,6 +19,10 @@
 #include "messaging/coap/separate.h"
 #include "oc_api.h"
 
+#if defined(OC_CLOUD) && defined(OC_SERVER)
+#include "oc_server_api_internal.h"
+#endif /* OC_CLOUD && OC_SERVER */
+
 #ifdef OC_SECURITY
 #include "security/oc_store.h"
 #endif /* OC_SECURITY */
@@ -34,6 +38,10 @@
 #include "oc_core_res.h"
 
 static size_t query_iterator;
+
+#if defined(OC_CLOUD) && defined(OC_SERVER)
+static oc_delete_resource_cb_t g_delayed_delete_resource_cb = NULL;
+#endif /* OC_CLOUD && OC_SERVER */
 
 int
 oc_add_device(const char *uri, const char *rt, const char *name,
@@ -63,6 +71,14 @@ oc_get_query_value(oc_request_t *request, const char *key, char **value)
   return oc_ri_get_query_value(request->query, request->query_len, key, value);
 }
 
+int
+oc_query_value_exists(oc_request_t *request, const char *key)
+{
+  if (!request)
+    return -1;
+  return oc_ri_query_exists(request->query, request->query_len, key);
+}
+
 static int
 response_length(void)
 {
@@ -82,8 +98,7 @@ oc_send_response(oc_request_t *request, oc_status_t response_code)
     request->response->response_buffer->content_format =
       APPLICATION_VND_OCF_CBOR;
   }
-  request->response->response_buffer->response_length =
-    (uint16_t)response_length();
+  request->response->response_buffer->response_length = response_length();
   request->response->response_buffer->code = oc_status_code(response_code);
 }
 
@@ -117,6 +132,14 @@ oc_set_delayed_callback(void *cb_data, oc_trigger_t callback, uint16_t seconds)
 }
 
 void
+oc_set_delayed_callback_ms(void *cb_data, oc_trigger_t callback,
+                           uint16_t miliseconds)
+{
+  oc_clock_time_t ticks = miliseconds * OC_CLOCK_SECOND / 1000;
+  oc_ri_add_timed_event_callback_ticks(cb_data, callback, ticks);
+}
+
+void
 oc_remove_delayed_callback(void *cb_data, oc_trigger_t callback)
 {
   oc_ri_remove_timed_event_callback(cb_data, callback);
@@ -143,6 +166,12 @@ oc_resource_tag_func_desc(oc_resource_t *resource, oc_enum_t func)
 }
 
 void
+oc_resource_tag_locn(oc_resource_t *resource, oc_enum_t locn)
+{
+  resource->tag_locn = locn;
+}
+
+void
 oc_process_baseline_interface(oc_resource_t *resource)
 {
   if (oc_string_len(resource->name) > 0) {
@@ -153,13 +182,27 @@ oc_process_baseline_interface(oc_resource_t *resource)
   if (resource->tag_pos_desc > 0) {
     const char *desc = oc_enum_pos_desc_to_str(resource->tag_pos_desc);
     if (desc) {
+      /* tag-pos-desc will be handled as a string */
+      // clang-format off
       oc_rep_set_text_string(root, tag-pos-desc, desc);
+      // clang-format on
     }
   }
   if (resource->tag_func_desc > 0) {
     const char *func = oc_enum_to_str(resource->tag_func_desc);
     if (func) {
+      /* tag-pos-desc will be handled as a string */
+      // clang-format off
       oc_rep_set_text_string(root, tag-func-desc, func);
+      // clang-format on
+    }
+  }
+  if (resource->tag_locn > 0) {
+    const char *locn = oc_enum_locn_to_str(resource->tag_locn);
+    if (locn) {
+      // clang-format off
+      oc_rep_set_text_string(root, tag-locn, locn);
+      // clang-format on
     }
   }
   double *pos = resource->tag_pos_rel;
@@ -240,7 +283,7 @@ oc_send_response_raw(oc_request_t *request, const uint8_t *payload, size_t size,
 {
   request->response->response_buffer->content_format = content_format;
   memcpy(request->response->response_buffer->buffer, payload, size);
-  request->response->response_buffer->response_length = (uint16_t)size;
+  request->response->response_buffer->response_length = size;
   request->response->response_buffer->code = oc_status_code(response_code);
 }
 
@@ -270,6 +313,13 @@ oc_populate_resource_object(oc_resource_t *resource, const char *name,
 #ifdef OC_SECURITY
   resource->properties |= OC_SECURE;
 #endif /* OC_SECURITY */
+#if defined(OC_RES_BATCH_SUPPORT) && defined(OC_DISCOVERY_RESOURCE_OBSERVABLE)
+  coap_notify_discovery_batch_observers(resource);
+#endif /* OC_RES_BATCH_SUPPORT && OC_DISCOVERY_RESOURCE_OBSERVABLE */
+#ifdef OC_DISCOVERY_RESOURCE_OBSERVABLE
+  oc_notify_observers_delayed(oc_core_get_resource_by_index(OCF_RES, device),
+                              0);
+#endif /* OC_DISCOVERY_RESOURCE_OBSERVABLE */
 }
 
 oc_resource_t *
@@ -293,14 +343,14 @@ oc_resource_t *
 oc_new_collection(const char *name, const char *uri, uint8_t num_resource_types,
                   size_t device)
 {
-  oc_collection_t *collection = oc_collection_alloc();
+  oc_resource_t *collection = (oc_resource_t *)oc_collection_alloc();
   if (collection) {
     collection->interfaces = OC_IF_BASELINE | OC_IF_LL | OC_IF_B;
     collection->default_interface = OC_IF_LL;
-    oc_populate_resource_object((oc_resource_t *)collection, name, uri,
-                                num_resource_types, device);
+    oc_populate_resource_object(collection, name, uri, num_resource_types,
+                                device);
   }
-  return (oc_resource_t *)collection;
+  return collection;
 }
 
 void
@@ -417,6 +467,20 @@ oc_resource_set_request_handler(oc_resource_t *resource, oc_method_t method,
   }
 }
 
+#ifdef OC_OSCORE
+void
+oc_resource_set_secure_mcast(oc_resource_t *resource, bool supported)
+{
+  if (resource) {
+    if (supported) {
+      resource->properties |= OC_SECURE_MCAST;
+    } else {
+      resource->properties &= ~OC_SECURE_MCAST;
+    }
+  }
+}
+#endif /* OC_OSCORE */
+
 void
 oc_set_con_write_cb(oc_con_write_cb_t callback)
 {
@@ -439,6 +503,33 @@ bool
 oc_delete_resource(oc_resource_t *resource)
 {
   return oc_ri_delete_resource(resource);
+}
+
+#ifdef OC_CLOUD
+void
+oc_set_on_delayed_delete_resource_cb(oc_delete_resource_cb_t callback)
+{
+  g_delayed_delete_resource_cb = callback;
+}
+#endif /* OC_CLOUD */
+
+static oc_event_callback_retval_t
+oc_delayed_delete_resource_cb(void *data)
+{
+  oc_resource_t *resource = (oc_resource_t *)data;
+#ifdef OC_CLOUD
+  if (g_delayed_delete_resource_cb) {
+    g_delayed_delete_resource_cb(resource);
+  }
+#endif /* OC_CLOUD */
+  oc_delete_resource(resource);
+  return OC_EVENT_DONE;
+}
+
+void
+oc_delayed_delete_resource(oc_resource_t *resource)
+{
+  oc_set_delayed_callback(resource, oc_delayed_delete_resource_cb, 0);
 }
 
 void
@@ -465,7 +556,11 @@ oc_send_separate_response(oc_separate_response_t *handle,
 {
   oc_response_buffer_t response_buffer;
   response_buffer.buffer = handle->buffer;
-  response_buffer.response_length = (uint16_t)response_length();
+  if (handle->len != 0)
+    response_buffer.response_length = handle->len;
+  else
+    response_buffer.response_length = response_length();
+
   response_buffer.code = oc_status_code(response_code);
   response_buffer.content_format = APPLICATION_VND_OCF_CBOR;
 
@@ -475,8 +570,8 @@ oc_send_separate_response(oc_separate_response_t *handle,
   while (cur != NULL) {
     next = cur->next;
     if (cur->observe < 3) {
-      coap_transaction_t *t =
-        coap_new_transaction(coap_get_mid(), &cur->endpoint);
+      coap_transaction_t *t = coap_new_transaction(
+        coap_get_mid(), cur->token, cur->token_len, &cur->endpoint);
       if (t) {
         coap_separate_resume(response, cur,
                              (uint8_t)oc_status_code(response_code), t->mid);
@@ -563,4 +658,41 @@ oc_notify_observers(oc_resource_t *resource)
 {
   return coap_notify_observers(resource, NULL, NULL);
 }
+
+static oc_event_callback_retval_t
+oc_observe_notification_delayed(void *data)
+{
+  (void)data;
+  coap_notify_observers((oc_resource_t *)data, NULL, NULL);
+  return OC_EVENT_DONE;
+}
+
+static void
+oc_notify_observers_delayed_ticks(oc_resource_t *resource,
+                                  oc_clock_time_t ticks)
+{
+  if (resource == NULL) {
+    return;
+  }
+  if (!coap_want_be_notified(resource)) {
+    return;
+  }
+  oc_remove_delayed_callback(resource, &oc_observe_notification_delayed);
+  oc_set_delayed_callback(resource, &oc_observe_notification_delayed, ticks);
+}
+
+void
+oc_notify_observers_delayed(oc_resource_t *resource, uint16_t seconds)
+{
+  oc_clock_time_t ticks = seconds * OC_CLOCK_SECOND;
+  oc_notify_observers_delayed_ticks(resource, ticks);
+}
+
+void
+oc_notify_observers_delayed_ms(oc_resource_t *resource, uint16_t miliseconds)
+{
+  oc_clock_time_t ticks = miliseconds * OC_CLOCK_SECOND / 1000;
+  oc_notify_observers_delayed_ticks(resource, ticks);
+}
+
 #endif /* OC_SERVER */

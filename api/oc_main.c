@@ -37,14 +37,14 @@
 
 #ifdef OC_SECURITY
 #include "security/oc_acl_internal.h"
+#include "security/oc_ael.h"
 #include "security/oc_cred_internal.h"
 #include "security/oc_doxm.h"
 #include "security/oc_pstat.h"
+#include "security/oc_sp.h"
 #include "security/oc_store.h"
 #include "security/oc_svr.h"
 #include "security/oc_tls.h"
-#include "security/oc_sp.h"
-#include "security/oc_ael.h"
 #ifdef OC_PKI
 #include "security/oc_keypair.h"
 #endif /* OC_PKI */
@@ -63,6 +63,13 @@
 #endif /* OC_MEMORY_TRACE */
 
 #include "oc_main.h"
+
+#ifdef OC_DYNAMIC_ALLOCATION
+#include <stdlib.h>
+static bool *drop_commands;
+#else  /* OC_DYNAMIC_ALLOCATION */
+static bool drop_commands[OC_MAX_NUM_DEVICES];
+#endif /* !OC_DYNAMIC_ALLOCATION */
 
 static bool initialized = false;
 static const oc_handler_t *app_callbacks;
@@ -83,18 +90,33 @@ oc_get_factory_presets_cb(void)
 
 #ifdef OC_DYNAMIC_ALLOCATION
 #include "oc_buffer_settings.h"
+#ifdef OC_INOUT_BUFFER_SIZE
+static size_t _OC_MTU_SIZE = OC_INOUT_BUFFER_SIZE;
+#else  /* OC_INOUT_BUFFER_SIZE */
 static size_t _OC_MTU_SIZE = 2048 + COAP_MAX_HEADER_SIZE;
-static size_t _OC_MAX_APP_DATA_SIZE = 8192;
-static size_t _OC_BLOCK_SIZE = 1024;
+#endif /* !OC_INOUT_BUFFER_SIZE */
+#ifdef OC_APP_DATA_BUFFER_SIZE
+static size_t _OC_MAX_APP_DATA_SIZE = 7168;
+#else                                /* OC_APP_DATA_BUFFER_SIZE */
+static size_t _OC_MAX_APP_DATA_SIZE = 7168;
+#endif                               /* !OC_APP_DATA_BUFFER_SIZE */
+static size_t _OC_BLOCK_SIZE = 1024; // FIX
 
 int
 oc_set_mtu_size(size_t mtu_size)
 {
   (void)mtu_size;
+#ifdef OC_INOUT_BUFFER_SIZE
+  return -1;
+#endif /* OC_INOUT_BUFFER_SIZE */
 #ifdef OC_BLOCK_WISE
   if (mtu_size < (COAP_MAX_HEADER_SIZE + 16))
     return -1;
+#ifdef OC_OSCORE
+  _OC_MTU_SIZE = mtu_size + COAP_MAX_HEADER_SIZE;
+#else  /* OC_OSCORE */
   _OC_MTU_SIZE = mtu_size;
+#endif /* !OC_OSCORE */
   mtu_size -= COAP_MAX_HEADER_SIZE;
   size_t i;
   for (i = 10; i >= 4 && (mtu_size >> i) == 0; i--)
@@ -113,6 +135,9 @@ oc_get_mtu_size(void)
 void
 oc_set_max_app_data_size(size_t size)
 {
+#ifdef OC_APP_DATA_BUFFER_SIZE
+  return;
+#endif /* OC_APP_DATA_BUFFER_SIZE */
   _OC_MAX_APP_DATA_SIZE = size;
 #ifndef OC_BLOCK_WISE
   _OC_BLOCK_SIZE = size;
@@ -205,6 +230,12 @@ oc_main_init(const oc_handler_t *handler)
     oc_shutdown_all_devices();
     goto err;
   }
+#ifdef OC_DYNAMIC_ALLOCATION
+  drop_commands = (bool *)calloc(oc_core_get_num_devices(), sizeof(bool));
+  if (!drop_commands) {
+    oc_abort("Insufficient memory");
+  }
+#endif
 
 #ifdef OC_SECURITY
   ret = oc_tls_init_context();
@@ -219,18 +250,9 @@ oc_main_init(const oc_handler_t *handler)
   oc_sec_create_svr();
 #endif
 
-#if defined(OC_CLIENT) && defined(OC_SERVER) && defined(OC_CLOUD)
-  oc_cloud_init();
-#endif /* OC_CLIENT && OC_SERVER && OC_CLOUD */
-
 #ifdef OC_SOFTWARE_UPDATE
   oc_swupdate_init();
 #endif /* OC_SOFTWARE_UPDATE */
-
-#ifdef OC_SERVER
-  if (app_callbacks->register_resources)
-    app_callbacks->register_resources();
-#endif
 
 #ifdef OC_SECURITY
   size_t device;
@@ -257,6 +279,18 @@ oc_main_init(const oc_handler_t *handler)
   }
 #endif
 
+#if defined(OC_CLIENT) && defined(OC_SERVER) && defined(OC_CLOUD)
+  // initialize cloud after load pstat
+  oc_cloud_init();
+  OC_DBG("oc_main_init(): loading cloud");
+#endif /* OC_CLIENT && OC_SERVER && OC_CLOUD */
+
+#ifdef OC_SERVER
+  // initialize after cloud because their can be registered to cloud.
+  if (app_callbacks->register_resources)
+    app_callbacks->register_resources();
+#endif
+
   OC_DBG("oc_main: stack initialized");
 
   initialized = true;
@@ -270,6 +304,10 @@ oc_main_init(const oc_handler_t *handler)
 
 err:
   OC_ERR("oc_main: error in stack initialization");
+#ifdef OC_DYNAMIC_ALLOCATION
+  free(drop_commands);
+  drop_commands = NULL;
+#endif
   return ret;
 }
 
@@ -302,6 +340,7 @@ oc_main_shutdown(void)
   oc_ri_shutdown();
 
 #ifdef OC_SECURITY
+  oc_tls_shutdown();
   oc_sec_acl_free();
   oc_sec_cred_free();
   oc_sec_doxm_free();
@@ -312,7 +351,6 @@ oc_main_shutdown(void)
   oc_free_ecdsa_keypairs();
 #endif /* OC_PKI */
   oc_sec_sdi_free();
-  oc_tls_shutdown();
 #endif /* OC_SECURITY */
 
 #ifdef OC_SOFTWARE_UPDATE
@@ -320,6 +358,13 @@ oc_main_shutdown(void)
 #endif /* OC_SOFTWARE_UPDATE */
 
   oc_shutdown_all_devices();
+
+#ifdef OC_DYNAMIC_ALLOCATION
+  free(drop_commands);
+  drop_commands = NULL;
+#else
+  memset(drop_commands, 0, sizeof(bool) * OC_MAX_NUM_DEVICES);
+#endif
 
   app_callbacks = NULL;
 
@@ -340,4 +385,16 @@ _oc_signal_event_loop(void)
   if (app_callbacks) {
     app_callbacks->signal_event_loop();
   }
+}
+
+void
+oc_set_drop_commands(size_t device, bool drop)
+{
+  drop_commands[device] = drop;
+}
+
+bool
+oc_drop_command(size_t device)
+{
+  return drop_commands[device];
 }

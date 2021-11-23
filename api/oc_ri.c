@@ -50,20 +50,27 @@
 
 #if defined(OC_COLLECTIONS) && defined(OC_SERVER)
 #include "oc_collection.h"
+#ifdef OC_COLLECTIONS_IF_CREATE
+#include "oc_resource_factory.h"
+#endif /* OC_COLLECTIONS_IF_CREATE */
 #endif /* OC_COLLECTIONS && OC_SERVER */
 
 #ifdef OC_SECURITY
 #include "security/oc_acl_internal.h"
+#include "security/oc_audit.h"
 #include "security/oc_pstat.h"
 #include "security/oc_roles.h"
 #include "security/oc_tls.h"
-#include "security/oc_audit.h"
+#ifdef OC_OSCORE
+#include "security/oc_oscore.h"
+#endif /* OC_OSCORE */
 #endif /* OC_SECURITY */
 
 #ifdef OC_SERVER
 OC_LIST(app_resources);
 OC_LIST(observe_callbacks);
 OC_MEMB(app_resources_s, oc_resource_t, OC_MAX_APP_RESOURCES);
+OC_MEMB(resource_default_s, oc_resource_defaults_data_t, OC_MAX_APP_RESOURCES);
 #endif /* OC_SERVER */
 
 #ifdef OC_CLIENT
@@ -76,6 +83,8 @@ OC_LIST(timed_callbacks);
 OC_MEMB(event_callbacks_s, oc_event_callback_t,
         1 + OCF_D * OC_MAX_NUM_DEVICES + OC_MAX_APP_RESOURCES +
           OC_MAX_NUM_CONCURRENT_REQUESTS * 2);
+static oc_event_callback_t *currently_processed_event_cb;
+static bool currently_processed_event_cb_delete;
 
 OC_PROCESS(timed_callback_events, "OC timed callbacks");
 
@@ -173,9 +182,14 @@ oc_ri_get_query_nth_key_value(const char *query, size_t query_len, char **key,
 {
   int next_pos = -1;
   size_t i = 0;
-  char *start = (char *)query, *current, *end = (char *)query + query_len;
-  current = start;
+  char *start = (char *)query, *current, *current2,
+       *end = (char *)query + query_len;
 
+  if (start == NULL) {
+    return next_pos;
+  }
+
+  current = start;
   while (i < (n - 1) && current != NULL) {
     current = memchr(start, '&', end - start);
     if (current == NULL) {
@@ -186,6 +200,13 @@ oc_ri_get_query_nth_key_value(const char *query, size_t query_len, char **key,
   }
 
   current = memchr(start, '=', end - start);
+  current2 = memchr(start, '&', end - start);
+  if (current2 != NULL) {
+    if (current2 < current) {
+      /* the key is does not have = */
+      current = NULL;
+    }
+  }
   if (current != NULL) {
     *key_len = (current - start);
     *key = start;
@@ -197,7 +218,17 @@ oc_ri_get_query_nth_key_value(const char *query, size_t query_len, char **key,
       *value_len = (current - *value);
     }
     next_pos = (int)(*value + *value_len - query + 1);
+  } else {
+    current = memchr(start, '&', end - start);
+    if (current == NULL) {
+      current = end;
+    }
+    /* there is no value */
+    *key = start;
+    *key_len = (current - start);
+    next_pos = *key_len + 1;
   }
+
   return next_pos;
 }
 
@@ -225,6 +256,87 @@ oc_ri_get_query_value(const char *query, size_t query_len, const char *key,
   return found;
 }
 
+int
+oc_ri_query_nth_key_exists(const char *query, size_t query_len, char **key,
+                           size_t *key_len, size_t n)
+{
+  int next_pos = -1;
+  size_t i = 0;
+  size_t value_len;
+  char *start = (char *)query, *current, *current2,
+       *end = (char *)query + query_len;
+  char *value = NULL;
+  current = start;
+
+  while (i < (n - 1) && current != NULL) {
+    current = memchr(start, '&', end - start);
+    if (current == NULL) {
+      return -1;
+    }
+    i++;
+    start = current + 1;
+  }
+
+  current = memchr(start, '=', end - start);
+  current2 = memchr(start, '&', end - start);
+  if (current2 != NULL) {
+    if (current2 < current) {
+      /* the key is does not have = */
+      current = NULL;
+    }
+  }
+  if (current != NULL) {
+    /* there is a value */
+    *key_len = (current - start);
+    *key = start;
+    value = current + 1;
+    current = memchr(value, '&', end - value);
+    if (current == NULL) {
+      value_len = (end - value);
+    } else {
+      value_len = (current - value);
+    }
+    next_pos = (int)(value + value_len - query + 1);
+  } else {
+    current = memchr(start, '&', end - start);
+    if (current == NULL) {
+      current = end;
+    }
+    /* there is no value */
+    *key = start;
+    *key_len = (current - start);
+    next_pos = *key_len + 1;
+  }
+
+  return next_pos;
+}
+
+int
+oc_ri_query_exists(const char *query, size_t query_len, const char *key)
+{
+  int next_pos = 0, found = -1;
+  size_t kl, pos = 0;
+  char *k;
+
+  while (pos < query_len) {
+    next_pos =
+      oc_ri_query_nth_key_exists(query + pos, query_len - pos, &k, &kl, 1u);
+
+    if (next_pos == -1)
+      return -1;
+
+    if (kl == strlen(key) && strncasecmp(key, k, kl) == 0) {
+      found = 1;
+      break;
+    }
+    if (next_pos == 0)
+      return -1;
+
+    pos += next_pos;
+  }
+  return found;
+}
+
 static void
 allocate_events(void)
 {
@@ -245,6 +357,9 @@ start_processes(void)
 
 #ifdef OC_SECURITY
   oc_process_start(&oc_tls_handler, NULL);
+#ifdef OC_OSCORE
+  oc_process_start(&oc_oscore_handler, NULL);
+#endif /* OC_OSCORE */
 #endif /* OC_SECURITY */
 
   oc_process_start(&oc_network_events, NULL);
@@ -265,6 +380,9 @@ stop_processes(void)
   oc_process_exit(&coap_engine);
 
 #ifdef OC_SECURITY
+#ifdef OC_OSCORE
+  oc_process_exit(&oc_oscore_handler);
+#endif /* OC_OSCORE */
   oc_process_exit(&oc_tls_handler);
 #endif /* OC_SECURITY */
 
@@ -338,16 +456,55 @@ oc_ri_alloc_resource(void)
   return oc_memb_alloc(&app_resources_s);
 }
 
+oc_resource_defaults_data_t *
+oc_ri_alloc_resource_defaults(void)
+{
+  return oc_memb_alloc(&resource_default_s);
+}
+
 bool
 oc_ri_delete_resource(oc_resource_t *resource)
 {
   if (!resource)
     return false;
 
+  /**
+   * Prevent double deallocation: oc_rt_factory_free_created_resource
+   * called below will invoke the delete handler of the resource which will
+   * invoke this function again. We use the list of resources to check
+   * whether the resource exists and when it doesn't we assume that
+   * a deallocation of the resource was already invoked and skip this one.
+   */
+  if (oc_list_remove2(app_resources, resource) == NULL) {
+    return true;
+  }
+
   if (resource->num_observers > 0) {
     coap_remove_observer_by_resource(resource);
   }
-  oc_list_remove(app_resources, resource);
+#if defined(OC_RES_BATCH_SUPPORT) && defined(OC_DISCOVERY_RESOURCE_OBSERVABLE)
+  coap_remove_discovery_batch_observers_by_resource(resource);
+#endif
+
+#if defined(OC_SERVER)
+#if defined(OC_COLLECTIONS) && defined(OC_COLLECTIONS_IF_CREATE)
+  oc_rt_created_t *rtc = oc_rt_get_factory_create_for_resource(resource);
+  if (rtc != NULL) {
+#if defined(OC_RES_BATCH_SUPPORT) && defined(OC_DISCOVERY_RESOURCE_OBSERVABLE)
+    oc_resource_t *collection = (oc_resource_t *)rtc->collection;
+#endif /* OC_RES_BATCH_SUPPORT */
+    oc_rt_factory_free_created_resource(rtc, rtc->rf);
+#if defined(OC_RES_BATCH_SUPPORT) && defined(OC_DISCOVERY_RESOURCE_OBSERVABLE)
+    coap_notify_discovery_batch_observers(collection);
+#endif /* OC_RES_BATCH_SUPPORT && OC_DISCOVERY_RESOURCE_OBSERVABLE */
+  }
+#endif /* OC_COLLECTIONS && OC_COLLECTIONS_IF_CREATE */
+#ifdef OC_DISCOVERY_RESOURCE_OBSERVABLE
+  oc_notify_observers_delayed(
+    oc_core_get_resource_by_index(OCF_RES, resource->device), 0);
+#endif /* OC_DISCOVERY_RESOURCE_OBSERVABLE */
+#endif /* OC_SERVER */
+
   oc_ri_free_resource_properties(resource);
   oc_memb_free(&app_resources_s, resource);
   return true;
@@ -395,16 +552,28 @@ oc_ri_remove_timed_event_callback(void *cb_data, oc_trigger_t event_callback)
   oc_event_callback_t *event_cb =
     (oc_event_callback_t *)oc_list_head(timed_callbacks);
 
+  bool want_to_delete_currently_processed_event_cb = false;
   while (event_cb != NULL) {
     if (event_cb->data == cb_data && event_cb->callback == event_callback) {
-      OC_PROCESS_CONTEXT_BEGIN(&timed_callback_events);
-      oc_etimer_stop(&event_cb->timer);
-      OC_PROCESS_CONTEXT_END(&timed_callback_events);
-      oc_list_remove(timed_callbacks, event_cb);
-      oc_memb_free(&event_callbacks_s, event_cb);
-      break;
+      if (currently_processed_event_cb == event_cb) {
+        want_to_delete_currently_processed_event_cb = true;
+      } else {
+        OC_PROCESS_CONTEXT_BEGIN(&timed_callback_events);
+        oc_etimer_stop(&event_cb->timer);
+        OC_PROCESS_CONTEXT_END(&timed_callback_events);
+        oc_list_remove(timed_callbacks, event_cb);
+        oc_memb_free(&event_callbacks_s, event_cb);
+        want_to_delete_currently_processed_event_cb = false;
+        break;
+      }
     }
     event_cb = event_cb->next;
+  }
+  if (want_to_delete_currently_processed_event_cb) {
+    // We can't remove the currently processed delayed callback because when
+    // the callback returns OC_EVENT_DONE, a double release occurs. So we
+    // set up the flag to remove it, and when it's over, we've removed it.
+    currently_processed_event_cb_delete = true;
   }
 }
 
@@ -435,9 +604,11 @@ poll_event_callback_timers(oc_list_t list, struct oc_memb *cb_pool)
 
   while (event_cb != NULL) {
     next = event_cb->next;
-
     if (oc_etimer_expired(&event_cb->timer)) {
-      if (event_cb->callback(event_cb->data) == OC_EVENT_DONE) {
+      currently_processed_event_cb = event_cb;
+      currently_processed_event_cb_delete = false;
+      if ((event_cb->callback(event_cb->data) == OC_EVENT_DONE) ||
+          currently_processed_event_cb_delete) {
         oc_list_remove(list, event_cb);
         oc_memb_free(cb_pool, event_cb);
         event_cb = oc_list_head(list);
@@ -453,6 +624,8 @@ poll_event_callback_timers(oc_list_t list, struct oc_memb *cb_pool)
 
     event_cb = next;
   }
+  currently_processed_event_cb = NULL;
+  currently_processed_event_cb_delete = false;
 }
 
 static void
@@ -466,10 +639,12 @@ check_event_callbacks(void)
 
 #ifdef OC_SERVER
 static oc_event_callback_retval_t
-oc_observe_notification_delayed(void *data)
+oc_observe_notification_resource_defaults_delayed(void *data)
 {
-  (void)data;
-  coap_notify_observers((oc_resource_t *)data, NULL, NULL);
+  oc_resource_defaults_data_t *resource_defaults_data =
+    (oc_resource_defaults_data_t *)data;
+  notify_resource_defaults_observer(resource_defaults_data->resource,
+                                    resource_defaults_data->iface_mask, NULL);
   return OC_EVENT_DONE;
 }
 #endif
@@ -589,6 +764,12 @@ oc_ri_get_interface_mask(char *iface, size_t if_len)
     iface_mask |= OC_IF_S;
   if (13 == if_len && strncmp(iface, "oic.if.create", if_len) == 0)
     iface_mask |= OC_IF_CREATE;
+  if (14 == if_len && strncmp(iface, "oic.if.startup", if_len) == 0)
+    iface_mask |= OC_IF_STARTUP;
+  if (21 == if_len && strncmp(iface, "oic.if.startup.revert", if_len) == 0)
+    iface_mask |= OC_IF_STARTUP_REVERT;
+  if (8 == if_len && strncmp(iface, "oic.if.w", if_len) == 0)
+    iface_mask |= OC_IF_W;
   return iface_mask;
 }
 
@@ -620,6 +801,9 @@ does_interface_support_method(oc_interface_mask_t iface_mask,
    * supports CREATE, RETRIEVE and UPDATE.
    */
   case OC_IF_A:
+  case OC_IF_STARTUP:
+  case OC_IF_STARTUP_REVERT:
+  case OC_IF_W:
     break;
   }
   return supported;
@@ -756,6 +940,10 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
   oc_content_format_t cf = 0;
   coap_get_header_content_format(request, &cf);
 
+  /* Read the accept CoAP option in the request */
+  unsigned int accept = 0;
+  coap_get_header_accept(request, &accept);
+
   if (uri_query_len) {
     request_obj.query = uri_query;
     request_obj.query_len = (int)uri_query_len;
@@ -783,6 +971,7 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
   request_obj._payload = payload;
   request_obj._payload_len = (size_t)payload_len;
   request_obj.content_format = cf;
+  request_obj.accept = accept;
 #ifndef OC_DYNAMIC_ALLOCATION
   char rep_objects_alloc[OC_MAX_NUM_REP_OBJECTS];
   oc_rep_t rep_objects_pool[OC_MAX_NUM_REP_OBJECTS];
@@ -813,13 +1002,6 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
         entity_too_large = true;
       bad_request = true;
     }
-
-#if defined(OC_BLOCK_WISE)
-    /* Free request_state cause it isn't used any more
-     */
-    oc_blockwise_free_request_buffer(*request_state);
-    *request_state = NULL;
-#endif
   }
 
   oc_resource_t *resource, *cur_resource = NULL;
@@ -898,13 +1080,13 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
                         uri_query_len);
         }
         response_buffer.buffer = (*response_state)->buffer;
-        response_buffer.buffer_size = (uint16_t)OC_MAX_APP_DATA_SIZE;
+        response_buffer.buffer_size = OC_MAX_APP_DATA_SIZE;
       }
     }
   }
 #else  /* OC_BLOCK_WISE */
   response_buffer.buffer = buffer;
-  response_buffer.buffer_size = (uint16_t)OC_BLOCK_SIZE;
+  response_buffer.buffer_size = OC_BLOCK_SIZE;
 #endif /* !OC_BLOCK_WISE */
 
   if (cur_resource && !bad_request) {
@@ -957,6 +1139,11 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
       }
     }
   }
+
+#if defined(OC_BLOCK_WISE)
+  oc_blockwise_free_request_buffer(*request_state);
+  *request_state = NULL;
+#endif
 
   if (request_obj.request_payload) {
     /* To the extent that the request payload was parsed, free the
@@ -1158,9 +1345,20 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
       !resource_is_collection &&
 #endif /* OC_COLLECTIONS */
       cur_resource && (method == OC_PUT || method == OC_POST) &&
-      response_buffer.code < oc_status_code(OC_STATUS_BAD_REQUEST))
-      oc_ri_add_timed_event_callback_ticks(cur_resource,
-                                           &oc_observe_notification_delayed, 0);
+      response_buffer.code < oc_status_code(OC_STATUS_BAD_REQUEST)) {
+      if ((iface_mask == OC_IF_STARTUP) ||
+          (iface_mask == OC_IF_STARTUP_REVERT)) {
+        oc_resource_defaults_data_t *resource_defaults_data =
+          oc_ri_alloc_resource_defaults();
+        resource_defaults_data->resource = cur_resource;
+        resource_defaults_data->iface_mask = iface_mask;
+        oc_ri_add_timed_event_callback_ticks(
+          resource_defaults_data,
+          &oc_observe_notification_resource_defaults_delayed, 0);
+      } else {
+        oc_notify_observers_delayed(cur_resource, 0);
+      }
+    }
 
 #endif /* OC_SERVER */
     if (response_buffer.response_length > 0) {
@@ -1358,6 +1556,17 @@ oc_ri_invoke_client_cb(void *response, oc_client_cb_t *cb,
 #else  /* OC_BLOCK_WISE */
   coap_get_header_observe(pkt, (uint32_t *)&client_response.observe_option);
 #endif /* !OC_BLOCK_WISE */
+
+#if defined(OC_OSCORE) && defined(OC_SECURITY)
+  if (client_response.observe_option > 1) {
+    uint64_t notification_num = 0;
+    oscore_read_piv(endpoint->piv, endpoint->piv_len, &notification_num);
+    if (notification_num < cb->notification_num) {
+      return true;
+    }
+    cb->notification_num = notification_num;
+  }
+#endif /* OC_OSCORE && OC_SECURITY */
 
   bool separate = false;
 
@@ -1574,7 +1783,7 @@ oc_ri_shutdown(void)
 #ifdef OC_COLLECTIONS
   oc_collection_t *collection = oc_collection_get_all(), *next;
   while (collection != NULL) {
-    next = collection->next;
+    next = (oc_collection_t *)collection->res.next;
     oc_collection_free(collection);
     collection = next;
   }

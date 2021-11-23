@@ -147,6 +147,15 @@ oc_core_encode_interfaces_mask(CborEncoder *parent,
   if (iface_mask & OC_IF_BASELINE) {
     oc_rep_add_text_string(if, "oic.if.baseline");
   }
+  if (iface_mask & OC_IF_W) {
+    oc_rep_add_text_string(if, "oic.if.w");
+  }
+  if (iface_mask & OC_IF_STARTUP) {
+    oc_rep_add_text_string(if, "oic.if.startup");
+  }
+  if (iface_mask & OC_IF_STARTUP_REVERT) {
+    oc_rep_add_text_string(if, "oic.if.startup.revert");
+  }
   oc_rep_end_array((parent), if);
 }
 
@@ -204,6 +213,12 @@ oc_core_con_handler_get(oc_request_t *request, oc_interface_mask_t iface_mask,
     /* oic.wk.d attribute n shall always be the same value as
     oic.wk.con attribute n. */
     oc_rep_set_text_string(root, n, oc_string(oc_device_info[device].name));
+
+    oc_locn_t oc_locn = oc_core_get_resource_by_index(OCF_D, 0)->tag_locn;
+    if (oc_locn > 0) {
+      oc_rep_set_text_string(root, locn, oc_enum_locn_to_str(oc_locn));
+    }
+
   } break;
   default:
     break;
@@ -235,13 +250,34 @@ oc_core_con_handler_post(oc_request_t *request, oc_interface_mask_t iface_mask,
       oc_rep_start_root_object();
       oc_rep_set_text_string(root, n, oc_string(oc_device_info[device].name));
       oc_rep_end_root_object();
-      /* notify_observers is automatically triggered in
-         oc_ri_invoke_coap_entity_handler() for oic.wk.con,
-         we cannot notify name change of oic.wk.d, as this
-         is not observable */
+
+#if defined(OC_SERVER)
+      oc_notify_observers_delayed(oc_core_get_resource_by_index(OCF_D, device),
+                                  0);
+#endif /* OC_SERVER && OC_CLOUD */
+
       changed = true;
       break;
     }
+    if (strcmp(oc_string(rep->name), "locn") == 0) {
+      if (rep->type != OC_REP_STRING || oc_string_len(rep->value.string) == 0) {
+        oc_send_response(request, OC_STATUS_BAD_REQUEST);
+        return;
+      }
+      oc_resource_t *device = oc_core_get_resource_by_index(OCF_D, 0);
+      if (device->tag_locn == 0) {
+        oc_send_response(request, OC_STATUS_BAD_REQUEST);
+        return;
+      }
+
+      bool oc_defined = false;
+      oc_locn_t oc_locn = oc_str_to_enum_locn(rep->value.string, &oc_defined);
+      if (oc_defined) {
+        oc_resource_tag_locn(device, oc_locn);
+        changed = true;
+      }
+    }
+
     rep = rep->next;
   }
 
@@ -322,14 +358,18 @@ oc_core_add_new_device(const char *uri, const char *rt, const char *name,
   oc_gen_uuid(&oc_device_info[device_count].di);
 
   /* Construct device resource */
+  int properties = OC_DISCOVERABLE;
+#ifdef OC_CLOUD
+  properties |= OC_OBSERVABLE;
+#endif /* OC_CLOUD */
   if (strlen(rt) == 8 && strncmp(rt, "oic.wk.d", 8) == 0) {
-    oc_core_populate_resource(
-      OCF_D, device_count, uri, OC_IF_R | OC_IF_BASELINE, OC_IF_R,
-      OC_DISCOVERABLE, oc_core_device_handler, 0, 0, 0, 1, rt);
+    oc_core_populate_resource(OCF_D, device_count, uri,
+                              OC_IF_R | OC_IF_BASELINE, OC_IF_R, properties,
+                              oc_core_device_handler, 0, 0, 0, 1, rt);
   } else {
     oc_core_populate_resource(
-      OCF_D, device_count, uri, OC_IF_R | OC_IF_BASELINE, OC_IF_R,
-      OC_DISCOVERABLE, oc_core_device_handler, 0, 0, 0, 2, rt, "oic.wk.d");
+      OCF_D, device_count, uri, OC_IF_R | OC_IF_BASELINE, OC_IF_R, properties,
+      oc_core_device_handler, 0, 0, 0, 2, rt, "oic.wk.d");
   }
 
   oc_gen_uuid(&oc_device_info[device_count].piid);
@@ -343,13 +383,19 @@ oc_core_add_new_device(const char *uri, const char *rt, const char *name,
 
   if (oc_get_con_res_announced()) {
     /* Construct oic.wk.con resource for this device. */
-    oc_core_populate_resource(
-      OCF_CON, device_count, "/" OC_NAME_CON_RES, OC_IF_RW | OC_IF_BASELINE,
-      OC_IF_RW, OC_DISCOVERABLE | OC_OBSERVABLE, oc_core_con_handler_get,
-      oc_core_con_handler_post, oc_core_con_handler_post, 0, 1, "oic.wk.con");
+
+    oc_core_populate_resource(OCF_CON, device_count, "/" OC_NAME_CON_RES,
+                              OC_IF_RW | OC_IF_BASELINE, OC_IF_RW,
+                              OC_DISCOVERABLE | OC_OBSERVABLE | OC_SECURE,
+                              oc_core_con_handler_get, oc_core_con_handler_post,
+                              oc_core_con_handler_post, 0, 1, "oic.wk.con");
   }
 
   oc_create_discovery_resource(OCF_RES, device_count);
+
+#ifdef OC_WKCORE
+  oc_create_discovery_resource(WELLKNOWNCORE, device_count);
+#endif
 
   oc_create_introspection_resource(device_count);
 
@@ -439,10 +485,14 @@ oc_core_init_platform(const char *mfg_name, oc_core_init_platform_cb_t init_cb,
     return &oc_platform_info;
   }
 
-  /* Populating resource obuject */
+  /* Populating resource object */
+  int properties = OC_DISCOVERABLE;
+#ifdef OC_CLOUD
+  properties |= OC_OBSERVABLE;
+#endif /* OC_CLOUD */
   oc_core_populate_resource(OCF_P, 0, "oic/p", OC_IF_R | OC_IF_BASELINE,
-                            OC_IF_R, OC_DISCOVERABLE, oc_core_platform_handler,
-                            0, 0, 0, 1, "oic.wk.p");
+                            OC_IF_R, properties, oc_core_platform_handler, 0, 0,
+                            0, 1, "oic.wk.p");
 
   oc_gen_uuid(&oc_platform_info.pi);
 
@@ -526,10 +576,49 @@ oc_core_get_platform_info(void)
 oc_resource_t *
 oc_core_get_resource_by_index(int type, size_t device)
 {
+  if (core_resources == NULL) {
+    return NULL;
+  }
   if (type == OCF_P) {
     return &core_resources[0];
   }
   return &core_resources[OCF_D * device + type];
+}
+
+#ifdef OC_SECURITY
+bool
+oc_core_is_SVR(oc_resource_t *resource, size_t device)
+{
+  size_t device_svrs = OCF_D * device + OCF_SEC_DOXM;
+
+  size_t SVRs_end = (device + 1) * OCF_D - 1, i;
+  for (i = device_svrs; i <= SVRs_end; i++) {
+    if (resource == &core_resources[i]) {
+      return true;
+    }
+  }
+
+  return false;
+}
+#endif /* OC_SECURITY */
+
+bool
+oc_core_is_vertical_resource(oc_resource_t *resource, size_t device)
+{
+  if (resource == &core_resources[0]) {
+    return true;
+  }
+
+  size_t device_resources = OCF_D * device;
+
+  size_t DCRs_end = device_resources + OCF_D, i;
+  for (i = device_resources + 1; i <= DCRs_end; i++) {
+    if (resource == &core_resources[i]) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool

@@ -77,8 +77,9 @@ static oc_link_t *
 rd_link_find_by_href(oc_link_t *head, const char *href, size_t href_size)
 {
   oc_link_t *iter = head;
-  while (iter != NULL && oc_string_len(iter->resource->uri) != href_size &&
-         !strncmp(oc_string(iter->resource->uri), href, href_size)) {
+  while (iter != NULL &&
+         (oc_string_len(iter->resource->uri) != href_size ||
+          strncmp(oc_string(iter->resource->uri), href, href_size))) {
     iter = iter->next;
   }
   return iter;
@@ -156,7 +157,7 @@ publish_resources(oc_cloud_context_t *ctx)
   }
 
   rd_publish(ctx->cloud_ep, ctx->rd_publish_resources, ctx->device,
-             publish_resources_handler, LOW_QOS, ctx);
+             ctx->time_to_live, publish_resources_handler, LOW_QOS, ctx);
 }
 
 int
@@ -258,7 +259,9 @@ cloud_rd_manager_status_changed(oc_cloud_context_t *ctx)
     publish_published_resources(ctx);
     delete_resources(ctx, false);
     oc_remove_delayed_callback(ctx, publish_published_resources);
-    oc_set_delayed_callback(ctx, publish_published_resources, ONE_HOUR);
+    if (ctx->time_to_live != RD_PUBLISH_TTL_UNLIMITED) {
+      oc_set_delayed_callback(ctx, publish_published_resources, ONE_HOUR);
+    }
   } else {
     oc_remove_delayed_callback(ctx, publish_published_resources);
   }
@@ -283,11 +286,23 @@ oc_cloud_delete_resource(oc_resource_t *res)
   }
   oc_link_t *publish =
     rd_link_remove_by_resource(&ctx->rd_publish_resources, res);
-  if (publish != NULL) {
-    oc_delete_link(publish);
-  }
+  oc_delete_link(publish);
+
   oc_link_t *published =
     rd_link_remove_by_resource(&ctx->rd_published_resources, res);
+
+#ifdef OC_SECURITY
+  oc_sec_pstat_t *pstat = oc_sec_get_pstat(res->device);
+  if (pstat->s == OC_DOS_RESET || pstat->s == OC_DOS_RFOTM) {
+    oc_delete_link(published);
+
+    oc_link_t *delete =
+      rd_link_remove_by_resource(&ctx->rd_delete_resources, res);
+    oc_delete_link(delete);
+    return;
+  }
+#endif /* OC_SECURITY */
+
   if (published != NULL) {
     if (published->resource) {
       published->resource = NULL;
@@ -308,6 +323,7 @@ oc_cloud_publish_resources(size_t device)
   }
   return -1;
 }
+
 #else  /* OC_CLOUD*/
 typedef int dummy_declaration;
 #endif /* !OC_CLOUD */

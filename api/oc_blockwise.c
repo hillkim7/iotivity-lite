@@ -30,6 +30,14 @@ OC_MEMB(oc_blockwise_response_states_s, oc_blockwise_response_state_t,
 OC_LIST(oc_blockwise_requests);
 OC_LIST(oc_blockwise_responses);
 
+#ifdef OC_APP_DATA_BUFFER_POOL
+typedef struct oc_app_data_buffer_t
+{
+  uint8_t buffer[OC_APP_DATA_BUFFER_SIZE];
+} oc_app_data_buffer_t;
+OC_MEMB_STATIC(oc_app_data_s, oc_app_data_buffer_t, OC_APP_DATA_BUFFER_POOL);
+#endif /* OC_APP_DATA_BUFFER_POOL */
+
 static oc_blockwise_state_t *
 oc_blockwise_init_buffer(struct oc_memb *pool, const char *href,
                          size_t href_len, oc_endpoint_t *endpoint,
@@ -41,7 +49,17 @@ oc_blockwise_init_buffer(struct oc_memb *pool, const char *href,
   oc_blockwise_state_t *buffer = (oc_blockwise_state_t *)oc_memb_alloc(pool);
   if (buffer) {
 #ifdef OC_DYNAMIC_ALLOCATION
-    buffer->buffer = (uint8_t *)malloc(OC_MAX_APP_DATA_SIZE);
+#ifdef OC_APP_DATA_BUFFER_POOL
+    oc_app_data_buffer_t *app_buffer =
+      (oc_app_data_buffer_t *)oc_memb_alloc(&oc_app_data_s);
+    if (app_buffer) {
+      buffer->block = app_buffer;
+      buffer->buffer = app_buffer->buffer;
+    }
+#endif /* OC_APP_DATA_BUFFER_POOL */
+    if (!buffer->buffer) {
+      buffer->buffer = (uint8_t *)malloc(OC_MAX_APP_DATA_SIZE);
+    }
     if (!buffer->buffer) {
       oc_memb_free(pool, buffer);
       return NULL;
@@ -56,6 +74,7 @@ oc_blockwise_init_buffer(struct oc_memb *pool, const char *href,
     buffer->endpoint.next = NULL;
     oc_new_string(&buffer->href, href, href_len);
     buffer->next = NULL;
+    buffer->finish_cb = NULL;
 #ifdef OC_CLIENT
     buffer->mid = 0;
     buffer->client_cb = NULL;
@@ -72,7 +91,6 @@ oc_blockwise_free_buffer(oc_list_t list, struct oc_memb *pool,
 {
 
   if (!buffer) {
-    OC_ERR("buffer is NULL");
     return;
   }
 
@@ -80,10 +98,22 @@ oc_blockwise_free_buffer(oc_list_t list, struct oc_memb *pool,
   oc_free_string(&buffer->href);
   oc_list_remove(list, buffer);
 #ifdef OC_DYNAMIC_ALLOCATION
-  free(buffer->buffer);
+#ifdef OC_APP_DATA_BUFFER_POOL
+  if (buffer->block) {
+    oc_memb_free(&oc_app_data_s, buffer->block);
+    buffer->buffer = NULL;
+  }
+#endif /* OC_APP_DATA_BUFFER_POOL */
+  if (buffer->buffer) {
+    free(buffer->buffer);
+  }
   buffer->buffer = NULL;
 #endif
+  oc_blockwise_finish_cb_t *finish_cb = buffer->finish_cb;
   oc_memb_free(pool, buffer);
+  if (finish_cb) {
+    finish_cb();
+  }
 }
 
 static oc_event_callback_retval_t

@@ -51,12 +51,13 @@
 #include <string.h>
 
 #include "api/oc_events.h"
+#include "api/oc_main.h"
 #include "oc_api.h"
 #include "oc_buffer.h"
 
 #ifdef OC_SECURITY
-#include "security/oc_tls.h"
 #include "security/oc_audit.h"
+#include "security/oc_tls.h"
 #endif /* OC_SECURITY */
 
 #ifdef OC_BLOCK_WISE
@@ -84,13 +85,19 @@ extern bool oc_ri_invoke_coap_entity_handler(void *request, void *response,
                                              oc_endpoint_t *endpoint);
 #endif /* !OC_BLOCK_WISE */
 
-#define OC_REQUEST_HISTORY_SIZE (250)
+#ifdef OC_REQUEST_HISTORY
+// The size of the array used to deduplicate CoAP messages.
+// A value of 25 means that the message ID & device counter
+// are compared to the ones in the last 25 messages. If a
+// match is found, the message is dropped as it must be
+// a duplicate.
+#define OC_REQUEST_HISTORY_SIZE (25)
 static uint16_t history[OC_REQUEST_HISTORY_SIZE];
 static uint8_t history_dev[OC_REQUEST_HISTORY_SIZE];
 static uint8_t idx;
 
-static bool
-check_if_duplicate(uint16_t mid, uint8_t device)
+bool
+oc_coap_check_if_duplicate(uint16_t mid, uint8_t device)
 {
   size_t i;
   for (i = 0; i < OC_REQUEST_HISTORY_SIZE; i++) {
@@ -101,6 +108,7 @@ check_if_duplicate(uint16_t mid, uint8_t device)
   }
   return false;
 }
+#endif /* OC_REQUEST_HISTORY */
 
 static void
 coap_send_empty_response(coap_message_type_t type, uint16_t mid,
@@ -151,6 +159,17 @@ coap_audit_log(oc_message_t *msg)
   char *aux[] = { ipaddr, buff1, buff2 };
   oc_audit_log(msg->endpoint.device, "COMM-1", "Unexpected CoAP command", 0x40,
                2, (const char **)aux, (length == 0) ? 2 : 3);
+}
+#endif /* OC_SECURITY */
+
+#ifdef OC_SECURITY
+static oc_event_callback_retval_t
+close_all_tls_sessions(void *data)
+{
+  size_t device = (size_t)data;
+  oc_close_all_tls_sessions_for_device(device);
+  oc_set_drop_commands(device, false);
+  return OC_EVENT_DONE;
 }
 #endif /* OC_SECURITY */
 
@@ -287,12 +306,15 @@ coap_receive(oc_message_t *msg)
           coap_udp_init_message(response, COAP_TYPE_ACK, CONTENT_2_05,
                                 message->mid);
         } else {
-          if (check_if_duplicate(message->mid, (uint8_t)msg->endpoint.device)) {
+#ifdef OC_REQUEST_HISTORY
+          if (oc_coap_check_if_duplicate(message->mid,
+                                         (uint8_t)msg->endpoint.device)) {
             return 0;
           }
           history[idx] = message->mid;
           history_dev[idx] = (uint8_t)msg->endpoint.device;
           idx = (idx + 1) % OC_REQUEST_HISTORY_SIZE;
+#endif /* OC_REQUEST_HISTORY */
           if (href_len == 7 && memcmp(href, "oic/res", 7) == 0) {
             coap_udp_init_message(response, COAP_TYPE_CON, CONTENT_2_05,
                                   coap_get_mid());
@@ -304,7 +326,8 @@ coap_receive(oc_message_t *msg)
       }
 
       /* create transaction for response */
-      transaction = coap_new_transaction(response->mid, &msg->endpoint);
+      transaction =
+        coap_new_transaction(response->mid, NULL, 0, &msg->endpoint);
 
       if (transaction) {
 #ifdef OC_BLOCK_WISE
@@ -327,6 +350,11 @@ coap_receive(oc_message_t *msg)
           }
 
           if (!request_buffer && block1_num == 0) {
+            if (oc_drop_command(msg->endpoint.device) &&
+                message->code >= COAP_GET && message->code <= COAP_DELETE) {
+              OC_WRN("cannot process new request during closing TLS sessions");
+              goto init_reset_message;
+            }
             OC_DBG("creating new block-wise request buffer");
             request_buffer = oc_blockwise_alloc_request_buffer(
               href, href_len, &msg->endpoint, message->code,
@@ -382,8 +410,12 @@ coap_receive(oc_message_t *msg)
 
           if (response_buffer && (response_buffer->next_block_offset -
                                   block2_offset) > block2_size) {
-            oc_blockwise_free_response_buffer(response_buffer);
-            response_buffer = NULL;
+            // UDP transfer can duplicate messages and we want to avoid
+            // terminate BWT, so we drop the message.
+            OC_DBG("dropped message because message was already provided for "
+                   "block2");
+            coap_clear_transaction(transaction);
+            return 0;
           }
 
           if (response_buffer) {
@@ -430,6 +462,13 @@ coap_receive(oc_message_t *msg)
                   message->uri_query, message->uri_query_len,
                   OC_BLOCKWISE_SERVER);
                 if (!request_buffer) {
+                  if (oc_drop_command(msg->endpoint.device) &&
+                      message->code >= COAP_GET &&
+                      message->code <= COAP_DELETE) {
+                    OC_WRN("cannot process new request during closing TLS "
+                           "sessions");
+                    goto init_reset_message;
+                  }
                   request_buffer = oc_blockwise_alloc_request_buffer(
                     href, href_len, &msg->endpoint, message->code,
                     OC_BLOCKWISE_SERVER);
@@ -456,6 +495,11 @@ coap_receive(oc_message_t *msg)
           goto init_reset_message;
         } else {
           OC_DBG("no block options; processing regular request");
+          if (oc_drop_command(msg->endpoint.device) &&
+              message->code >= COAP_GET && message->code <= COAP_DELETE) {
+            OC_WRN("cannot process new request during closing TLS sessions");
+            goto init_reset_message;
+          }
 #ifdef OC_TCP
           if ((msg->endpoint.flags & TCP &&
                incoming_block_len <= (uint32_t)OC_MAX_APP_DATA_SIZE) ||
@@ -646,7 +690,8 @@ coap_receive(oc_message_t *msg)
         }
         if (payload) {
           OC_DBG("dispatching next block");
-          transaction = coap_new_transaction(response_mid, &msg->endpoint);
+          transaction =
+            coap_new_transaction(response_mid, NULL, 0, &msg->endpoint);
           if (transaction) {
             coap_udp_init_message(response, COAP_TYPE_CON, client_cb->method,
                                   response_mid);
@@ -723,11 +768,13 @@ coap_receive(oc_message_t *msg)
           OC_DBG("processing incoming block");
           if (block2 && block2_more) {
             OC_DBG("issuing request for next block");
-            transaction = coap_new_transaction(response_mid, &msg->endpoint);
+            transaction =
+              coap_new_transaction(response_mid, NULL, 0, &msg->endpoint);
             if (transaction) {
               coap_udp_init_message(response, COAP_TYPE_CON, client_cb->method,
                                     response_mid);
               response_buffer->mid = response_mid;
+              client_cb->mid = response_mid;
               coap_set_header_accept(response, APPLICATION_VND_OCF_CBOR);
               coap_set_header_block2(response, block2_num + 1, 0, block2_size);
               coap_set_header_uri_path(response, oc_string(client_cb->uri),
@@ -846,6 +893,10 @@ send_message:
       }
 #endif /* OC_CLIENT && OC_BLOCK_WISE */
     }
+    if (response->token_len > 0) {
+      memcpy(transaction->token, response->token, response->token_len);
+      transaction->token_len = response->token_len;
+    }
     transaction->message->length =
       coap_serialize_message(response, transaction->message->data);
     if (transaction->message->length > 0) {
@@ -857,7 +908,9 @@ send_message:
 
 #ifdef OC_SECURITY
   if (coap_status_code == CLOSE_ALL_TLS_SESSIONS) {
-    oc_close_all_tls_sessions_for_device(msg->endpoint.device);
+    oc_set_drop_commands(msg->endpoint.device, true);
+    oc_set_delayed_callback((void *)msg->endpoint.device,
+                            &close_all_tls_sessions, 2);
   }
 #endif /* OC_SECURITY */
 

@@ -2,16 +2,17 @@
 #define OC_CONFIG_H
 
 /* Time resolution */
+#include "sdkconfig.h"
 #include <stdint.h>
 #include <time.h>
-#include "sdkconfig.h"
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-   typedef uint64_t oc_clock_time_t;
+#define OC_MULTICAST_RESPONSE_JITTER_MS (2000)
+
+typedef uint64_t oc_clock_time_t;
 #define OC_CLOCK_CONF_TICKS_PER_SECOND CLOCKS_PER_SEC
 //#define OC_SPEC_VER_OIC
 /* Security Layer */
@@ -25,6 +26,8 @@ extern "C"
 #define OC_NETWORK_MONITOR
 /* Add support for passing TCP/TLS/DTLS session connection events to the app */
 #define OC_SESSION_EVENTS
+/* Add request history for deduplicate UDP/DTLS messages */
+#define OC_REQUEST_HISTORY
 
 /* Add support for software update */
 //#define OC_SOFTWARE_UPDATE or run "make" with SWUPDATE=1
@@ -38,6 +41,9 @@ extern "C"
 #define OC_DNS_LOOKUP
 #define OC_DNS_CACHE
 //#define OC_DNS_LOOKUP_IPV6
+
+/* Add support observable for oic/res */
+//#define OC_DISCOVERY_RESOURCE_OBSERVABLE
 
 /* If we selected support for dynamic memory allocation */
 #ifdef OC_DYNAMIC_ALLOCATION

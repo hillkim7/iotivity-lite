@@ -20,8 +20,7 @@
 #include "oc_api.h"
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 typedef struct oc_rt_factory_t
@@ -51,6 +50,8 @@ void oc_rt_factory_free_created_resource(oc_rt_created_t *rtc,
                                          oc_rt_factory_t *rf);
 
 void oc_rt_factory_free_created_resources(size_t device);
+
+oc_rt_created_t *oc_rt_get_factory_create_for_resource(oc_resource_t *resource);
 
 void oc_fi_factory_free_all_created_resources(void);
 

@@ -160,6 +160,14 @@ valid_transition(size_t device, oc_dostype_t state)
   return true;
 }
 
+static oc_event_callback_retval_t
+close_all_tls_sessions(void *data)
+{
+  size_t device = (size_t)data;
+  oc_close_all_tls_sessions_for_device(device);
+  return OC_EVENT_DONE;
+}
+
 static bool
 oc_pstat_handle_state(oc_sec_pstat_t *ps, size_t device, bool from_storage,
                       bool self_reset)
@@ -192,15 +200,18 @@ oc_pstat_handle_state(oc_sec_pstat_t *ps, size_t device, bool from_storage,
     if (!from_storage && oc_get_con_res_announced()) {
       oc_device_info_t *di = oc_core_get_device_info(device);
       oc_free_string(&di->name);
+
+      oc_resource_t *oic_d = oc_core_get_resource_by_index(OCF_D, device);
+      oc_locn_t oc_locn = oic_d->tag_locn;
+      if (oc_locn > 0) {
+        oc_resource_tag_locn(oic_d, OCF_LOCN_UNKNOWN);
+      }
     }
 #ifdef OC_PKI
     oc_sec_free_roles_for_device(device);
 #endif /* OC_PKI */
     oc_sec_sp_default(device);
 #ifdef OC_SERVER
-#if defined(OC_COLLECTIONS) && defined(OC_COLLECTIONS_IF_CREATE)
-    oc_rt_factory_free_created_resources(device);
-#endif /* OC_COLLECTIONS && OC_COLLECTIONS_IF_CREATE */
     coap_remove_observers_on_dos_change(device, true);
 #endif /* OC_SERVER */
     ps->p = false;
@@ -225,6 +236,8 @@ oc_pstat_handle_state(oc_sec_pstat_t *ps, size_t device, bool from_storage,
     if (fp->cb != NULL) {
       if (self_reset) {
         oc_close_all_tls_sessions_for_device(device);
+      } else {
+        oc_set_delayed_callback((void *)device, close_all_tls_sessions, 0);
       }
       memcpy(&pstat[device], ps, sizeof(oc_sec_pstat_t));
       OC_DBG("oc_pstat: invoking the factory presets callback");
@@ -403,8 +416,18 @@ oc_pstat_handle_state(oc_sec_pstat_t *ps, size_t device, bool from_storage,
   }
   memmove(&pstat[device], ps, sizeof(oc_sec_pstat_t));
 #ifdef OC_SERVER
-  if (ps->s == OC_DOS_RFNOP) {
+  switch (ps->s) {
+  case OC_DOS_RESET:
+  case OC_DOS_RFOTM:
+#if defined(OC_COLLECTIONS) && defined(OC_COLLECTIONS_IF_CREATE)
+    oc_rt_factory_free_created_resources(device);
+#endif /* OC_COLLECTIONS && OC_COLLECTIONS_IF_CREATE */
+    break;
+  case OC_DOS_RFNOP:
     coap_remove_observers_on_dos_change(device, false);
+    break;
+  default:
+    break;
   }
 #endif /* OC_SERVER */
   OC_DBG("oc_pstat: leaving pstat_handle_state");
