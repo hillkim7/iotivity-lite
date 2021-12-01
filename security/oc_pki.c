@@ -25,6 +25,11 @@
 #include "oc_tls.h"
 #include "port/oc_connectivity.h"
 
+#if defined(FOR_CTT_PASS)
+#undef OC_DBG
+#define OC_DBG(...) OC_LOG("PKI", __VA_ARGS__)
+#endif
+
 static int
 pki_add_intermediate_cert(size_t device, int credid, const unsigned char *cert,
                           size_t cert_size)

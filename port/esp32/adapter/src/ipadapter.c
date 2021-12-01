@@ -45,6 +45,11 @@
 #include "esp_wifi.h"
 #include <lwip/sockets.h>
 
+#if defined(FOR_CTT_PASS)
+#undef OC_DBG
+#define OC_DBG(...) OC_LOG("IPADAPTER", __VA_ARGS__)
+#endif
+
 #define ipi_spec_dst ipi_addr
 #define IN6_IS_ADDR_V4MAPPED(a)                                                \
   ((((__const uint32_t *)(a))[0] == 0) &&                                      \
@@ -543,7 +548,7 @@ refresh_endpoints_list(ip_context_t *dev)
 oc_endpoint_t *
 oc_connectivity_get_endpoints(size_t device)
 {
-  OC_DBG("oc_connectivity_get_endpoints %d", (int)device);
+  //OC_DBG("oc_connectivity_get_endpoints %d", (int)device);
   ip_context_t *dev = get_ip_context_for_device(device);
 
   if (!dev) {
@@ -854,7 +859,7 @@ network_event_thread(void *data)
 
       if (oc_udp_receive_message(dev, &setfds, message) ==
           ADAPTER_STATUS_RECEIVE) {
-        OC_DBG("network_event_thread oc_udp_receive_message");
+        OC_DBG("oc_udp_receive_message %d", message->length);
         goto common;
       }
 #ifdef OC_TCP

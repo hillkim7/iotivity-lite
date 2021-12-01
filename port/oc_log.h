@@ -21,6 +21,17 @@
 
 #include <stdio.h>
 
+// {{ ESP32 OCF PORTING
+#include <string.h>
+
+#ifdef WIN32
+#define DBG_FILE_SEP '\\'
+#else
+#define DBG_FILE_SEP '/'
+#endif
+
+// }}
+
 #ifdef __ANDROID__
 #include "android/oc_log_android.h"
 #endif
@@ -169,35 +180,67 @@ extern "C"
 #define OC_LOGipaddr(endpoint)      android_log_ipaddr("DEBUG", __FILE__, __func__, __LINE__, endpoint)
 #define OC_LOGbytes(bytes, length)  android_log_bytes("DEBUG", __FILE__, __func__, __LINE__, bytes, length)
 #else  /* ! __ANDROID */
+#if 1
+    // {{ ESP32 OCF PORTING
+
 #define OC_LOG(level, ...)                                                     \
-  do {                                                                         \
-    PRINT("%s: %s <%s:%d>: ", level, __FILE__, __func__, __LINE__);            \
-    PRINT(__VA_ARGS__);                                                        \
-    PRINT("\n");                                                               \
-  } while (0)
+      do {                                                                         \
+        PRINT("%s %s:%d ", level, strrchr(__FILE__, DBG_FILE_SEP) + 1, __LINE__);\
+        PRINT(__VA_ARGS__);                                                        \
+        PRINT("\n");                                                               \
+      } while (0)
+    // }}
+#else
+#define OC_LOG(level, ...)                                                     \
+    do {                                                                         \
+      PRINT("%s: %s <%s:%d>: ", level, __FILE__, __func__, __LINE__);            \
+      PRINT(__VA_ARGS__);                                                        \
+      PRINT("\n");                                                               \
+    } while (0)
+#endif
 #define OC_LOGipaddr(endpoint)                                                 \
   do {                                                                         \
     PRINT("DEBUG: %s <%s:%d>: ", __FILE__, __func__, __LINE__);                \
     PRINTipaddr(endpoint);                                                     \
     PRINT("\n");                                                               \
   } while (0)
+#if 1
+    // {{ ESP32 OCF PORTING
+    // disable too many debug message
 #define OC_LOGbytes(bytes, length)                                             \
-  do {                                                                         \
-    PRINT("DEBUG: %s <%s:%d>: ", __FILE__, __func__, __LINE__);                \
-    uint16_t i;                                                                \
-    for (i = 0; i < length; i++)                                               \
-      PRINT(" %02X", bytes[i]);                                                \
-    PRINT("\n");                                                               \
-  } while (0)
+    PRINT("\n")
+    // }}
+#else
+#define OC_LOGbytes(bytes, length)                                             \
+    do {                                                                         \
+      PRINT("DEBUG: %s <%s:%d>: ", __FILE__, __func__, __LINE__);                \
+      uint16_t i;                                                                \
+      for (i = 0; i < length; i++)                                               \
+        PRINT(" %02X", bytes[i]);                                                \
+      PRINT("\n");                                                               \
+    } while (0)
+#endif
 #endif /* __ANDROID__ */
 #define OC_DBG(...) OC_LOG("DEBUG", __VA_ARGS__)
 #define OC_WRN(...) OC_LOG("WARNING", __VA_ARGS__)
 #define OC_ERR(...) OC_LOG("ERROR", __VA_ARGS__)
 #else
-#define OC_LOG(...)
+extern unsigned esp_get_free_heap_size();
+#define OC_LOG(level, ...)                                                     \
+         do {                                                                         \
+           PRINT("%s %s:%d(%d) ", level, strrchr(__FILE__, DBG_FILE_SEP) + 1, __LINE__, esp_get_free_heap_size());\
+           PRINT(__VA_ARGS__);                                                        \
+           PRINT("\n");                                                               \
+         } while (0)
+       // }}
 #define OC_DBG(...)
+#if 1
+#define OC_WRN(...) OC_LOG("WARNING", __VA_ARGS__)
+#define OC_ERR(...) OC_LOG("ERROR", __VA_ARGS__)
+#else
 #define OC_WRN(...)
 #define OC_ERR(...)
+#endif
 #define OC_LOGipaddr(endpoint)
 #define OC_LOGbytes(bytes, length)
 #endif

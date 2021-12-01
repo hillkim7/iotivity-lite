@@ -36,7 +36,12 @@ typedef uint64_t oc_clock_time_t;
 /* Add support for the maintenance resource */
 //#define OC_MNT or run "make" with MNT=1
 /* Add batch interface support to /oic/res */
-#define OC_RES_BATCH_SUPPORT
+
+// for CTT TEST
+//#define OC_RES_BATCH_SUPPORT
+//#define FORCE_JUST_WORK 1
+#define FOR_CTT_PASS
+
 /* Add support for dns lookup to the endpoint */
 #define OC_DNS_LOOKUP
 #define OC_DNS_CACHE

@@ -46,6 +46,11 @@ static oc_sec_pstat_t *pstat;
 static oc_sec_pstat_t pstat[OC_MAX_NUM_DEVICES];
 #endif /* !OC_DYNAMIC_ALLOCATION */
 
+#if defined(FOR_CTT_PASS)
+#undef OC_DBG
+#define OC_DBG(...) OC_LOG("PSTAT", __VA_ARGS__)
+#endif
+
 // ECHOMNET_MODIFIED
 static const char* pstat_dos_name(const oc_dostype_t s)
 {
@@ -172,7 +177,7 @@ static bool
 oc_pstat_handle_state(oc_sec_pstat_t *ps, size_t device, bool from_storage,
                       bool self_reset)
 {
-  OC_DBG("oc_pstat: Entering pstat_handle_state");
+  OC_DBG("oc_pstat: Entering pstat_handle_state: s=%d from_storage=%d self_reset=%d", ps->s, from_storage, self_reset);
   oc_sec_acl_t *acl = oc_sec_get_acl(device);
   oc_sec_doxm_t *doxm = oc_sec_get_doxm(device);
   oc_sec_creds_t *creds = oc_sec_get_creds(device);
@@ -224,7 +229,7 @@ oc_pstat_handle_state(oc_sec_pstat_t *ps, size_t device, bool from_storage,
     ps->tm = 0;
     if (doxm->owned || !nil_uuid(&doxm->devowneruuid) || ps->isop ||
         (ps->cm & 0xC3) != 2 || (ps->tm & 0xC3) != 0) {
-#ifdef OC_DEBUG
+#if 1 //def OC_DEBUG
       if (!nil_uuid(&doxm->devowneruuid)) {
         OC_ERR("non-Nil doxm:devowneruuid in RFOTM");
       }

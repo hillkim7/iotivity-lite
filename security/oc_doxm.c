@@ -29,6 +29,11 @@
 #include <strings.h>
 #endif
 
+#if defined(FOR_CTT_PASS)
+#undef OC_DBG
+#define OC_DBG(...) OC_LOG("DOXM", __VA_ARGS__)
+#endif
+
 #ifdef OC_DYNAMIC_ALLOCATION
 #include "port/oc_assert.h"
 #include <stdlib.h>
@@ -66,6 +71,7 @@ oc_sec_doxm_free(void)
 void
 oc_sec_doxm_init(void)
 {
+
 #ifdef OC_DYNAMIC_ALLOCATION
   doxm =
     (oc_sec_doxm_t *)calloc(oc_core_get_num_devices(), sizeof(oc_sec_doxm_t));
@@ -82,7 +88,8 @@ evaluate_supported_oxms(size_t device)
   doxm[device].oxms[1] = -1;
   doxm[device].oxms[2] = -1;
   doxm[device].num_oxms = 1;
-  if (oc_tls_is_pin_otm_supported(device)) {
+
+   if (oc_tls_is_pin_otm_supported(device)) {
     doxm[device].oxms[doxm[device].num_oxms++] = OC_OXMTYPE_RDP;
   }
 #ifdef OC_PKI
@@ -90,6 +97,10 @@ evaluate_supported_oxms(size_t device)
     doxm[device].oxms[doxm[device].num_oxms++] = OC_OXMTYPE_MFG_CERT;
   }
 #endif /* OC_PKI */
+
+#if defined(FOR_CTT_PASS)
+  OC_DBG("*CTT*<%s> oxms[%d]=%d", __FUNCTION__, doxm[device].num_oxms-1, doxm[device].oxms[doxm[device].num_oxms-1]);
+#endif
 }
 
 void
@@ -110,6 +121,7 @@ oc_sec_doxm_default(size_t device)
   doxm[device].oxmsel = 4;
 #ifdef OC_PKI
   doxm[device].sct = 9;
+
 #else  /* OC_PKI */
   doxm[device].sct = 1;
 #endif /* !OC_PKI */
@@ -130,6 +142,7 @@ oc_sec_doxm_default(size_t device)
   oc_gen_uuid(&doxm[device].deviceuuid);
   memcpy(d->di.id, doxm[device].deviceuuid.id, 16);
   oc_sec_dump_doxm(device);
+  OC_DBG("*CTT*<%s> doxm[%d].sct=%d", __FUNCTION__, device, doxm[device].sct);
 }
 
 void
@@ -147,6 +160,9 @@ oc_sec_encode_doxm(size_t device, oc_interface_mask_t iface_mask,
     evaluate_supported_oxms(device);
     oc_rep_set_int_array(root, oxms, doxm[device].oxms, doxm[device].num_oxms);
   }
+#if defined(FOR_CTT_PASS)
+  OC_DBG("[%d]oxmsel=%d sct=%d owned=%d", device, doxm[device].oxmsel, doxm[device].sct, doxm[device].owned);
+#endif
   /* oxmsel */
   oc_rep_set_int(root, oxmsel, doxm[device].oxmsel);
   /* sct */
@@ -397,13 +413,20 @@ oc_sec_decode_doxm(oc_rep_t *rep, bool from_storage, bool doc, size_t device)
     /* oxmsel and sct */
     case OC_REP_INT:
       if (len == 6 && memcmp(oc_string(rep->name), "oxmsel", 6) == 0) {
+        OC_DBG("doxm[%d].oxmsel=%d --> %d", device, doxm[device].oxmsel, (int)rep->value.integer);
         doxm[device].oxmsel = (int)rep->value.integer;
+        if (doxm[device].oxmsel >= doxm[device].num_oxms) {
+          //doxm[device].oxmsel = doxm[device].num_oxms-1;
+          //OC_DBG("FORCE doxm[%d].oxmsel=%d", device, doxm[device].oxmsel);
+        }
         if (!from_storage && doxm[device].oxmsel == OC_OXMTYPE_RDP) {
           oc_tls_generate_random_pin();
         }
+        OC_DBG("doxm[%d].oxmsel=%d", device, doxm[device].oxmsel);
       } else if (from_storage && len == 3 &&
                  memcmp(oc_string(rep->name), "sct", 3) == 0) {
         doxm[device].sct = (int)rep->value.integer;
+        OC_DBG("doxm[%d].sct=%d", device, doxm[device].sct);
       }
       break;
     /* deviceuuid, devowneruuid and rowneruuid */
@@ -437,6 +460,9 @@ oc_sec_decode_doxm(oc_rep_t *rep, bool from_storage, bool doc, size_t device)
                     invokee->user_data);
     }
   }
+#if defined(FOR_CTT_PASS)
+  printf("*CTT*<%s> [%d]oxmsel=%d sct=%d owned=%d\n", __FUNCTION__, device, doxm[device].oxmsel, doxm[device].sct, doxm[device].owned);
+#endif
   return true;
 }
 

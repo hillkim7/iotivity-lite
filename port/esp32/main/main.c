@@ -33,6 +33,9 @@
 #include <pthread.h>
 #include <stdio.h>
 
+#include <sys/time.h>
+#include <time.h>
+
 #define ECHOMNET_MODIFIED 1
 
 #if ECHOMNET_MODIFIED
@@ -89,7 +92,7 @@ app_init(void)
 #if ECHOMNET_MODIFIED
   int ret = oc_init_platform("Signal", NULL, NULL);
   ret |= oc_add_device("/oic/d", "oic.d.smartplug", device_name,
-      "ocf.2.2.3", /* icv value */
+      "ocf.2.2.4", /* icv value */
       "ocf.res.1.3.0, ocf.sh.1.3.0",  /* dmv value */
       NULL, NULL);
   return ret;
@@ -277,8 +280,9 @@ post_light(oc_request_t *request, oc_interface_mask_t interface,
     case OC_REP_BOOL:
       state = rep->value.boolean;
       PRINT("value: %d\n", state);
+#if 0
       gpio_set_level(BLINK_GPIO, state);
-
+#endif
       break;
 
     // case ...
@@ -507,16 +511,58 @@ cloud_status_handler(oc_cloud_context_t *ctx, oc_cloud_status_t status,
 #endif
 
 void
+random_pin_cb(const unsigned char *pin, size_t pin_len, void *data)
+{
+  (void)data;
+  PRINT("\n\nRandom PIN: %.*s\n\n", (int)pin_len, pin);
+}
+
+void
 factory_presets_cb_new(size_t device, void *data)
 {
+#if 0
   gpio_reset_pin(BLINK_GPIO);
   gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
+#endif
 
   oc_device_info_t *dev = oc_core_get_device_info(device);
   oc_free_string(&dev->name);
   oc_new_string(&dev->name, device_name, strlen(device_name));
   (void)data;
 #if defined(OC_SECURITY) && defined(OC_PKI)
+  /* code to include an pki certificate and root trust anchor */
+#include "oc_pki.h"
+#include "pki_certs.h"
+
+    //PRINT("%d password='%.*s'\n'", strlen(my_key), strlen(my_key), (const unsigned char *)my_key);
+
+    int credid =
+      oc_pki_add_mfg_cert(0, (const unsigned char *)my_cert, strlen(my_cert), (const unsigned char *)my_key, strlen(my_key));
+    if (credid < 0) {
+      PRINT("ERROR installing PKI certificate\n");
+    } else {
+      PRINT("oc_pki_add_mfg_cert: credid=%d\n", credid);
+    }
+  
+    if (oc_pki_add_mfg_intermediate_cert(0, credid, (const unsigned char *)int_ca, strlen(int_ca)) < 0) {
+      PRINT("ERROR installing intermediate CA certificate\n");
+    } else {
+      //PRINT("Successfully installed intermediate CA certificate\n");
+    }
+  
+    if (oc_pki_add_mfg_trust_anchor(0, (const unsigned char *)root_ca, strlen(root_ca)) < 0) {
+      PRINT("ERROR installing root certificate\n");
+    } else {
+      //PRINT("Successfully installed root certificate\n");
+    }
+  
+    oc_pki_set_security_profile(0, OC_SP_BASELINE, OC_SP_BASELINE, credid);
+    //oc_pki_set_security_profile(0, OC_SP_BLACK, OC_SP_BLACK, credid);
+#else
+      PRINT("No PKI certificates installed\n");
+#endif /* OC_SECURITY && OC_PKI */
+
+#if 0 //&& defined(OC_SECURITY) && defined(OC_PKI)
   PRINT("factory_presets_cb: %d\n", (int)device);
 
   const char *cert =
@@ -612,7 +658,8 @@ factory_presets_cb_new(size_t device, void *data)
     return;
   }
 
-  oc_pki_set_security_profile(0, OC_SP_BLACK, OC_SP_BLACK, ee_credid);
+  oc_pki_set_security_profile(0, OC_SP_BASELINE, OC_SP_BASELINE, ee_credid);
+  //_pki_set_security_profile(0, OC_SP_BLACK, OC_SP_BLACK, ee_credid);
 #endif /* OC_SECURITY && OC_PKI */
 }
 
@@ -772,6 +819,7 @@ server_main(void *pvParameter)
   oc_clock_time_t next_event;
 
 #ifdef OC_SECURITY
+  //oc_set_random_pin_callback(random_pin_cb, NULL);
   oc_storage_config("storage");
   oc_set_factory_presets_cb(factory_presets_cb_new, NULL);
 #endif /* OC_SECURITY */
@@ -820,8 +868,18 @@ app_main(void)
   if (nvs_flash_init() != ESP_OK) {
     print_error("nvs_flash_init failed");
   }
+#if 0
   gpio_reset_pin(BLINK_GPIO);
   gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
+#endif
+
+  struct timeval tv = {0, 0};
+  tv.tv_sec = 1638052063;
+  settimeofday(&tv, NULL);
+  time_t now;
+  time(&now);
+  printf("current: %s", ctime(&now));
+
 
   pthread_cond_init(&cv, NULL);
 

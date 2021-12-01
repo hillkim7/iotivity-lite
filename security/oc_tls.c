@@ -29,7 +29,7 @@
 #include "mbedtls/ssl_cookie.h"
 #include "mbedtls/ssl_internal.h"
 #include "mbedtls/timing.h"
-#ifdef OC_DEBUG
+#if 1 // defined(FOR_CTT_PASS) || defined(OC_DEBUG)
 #include "mbedtls/debug.h"
 #include "mbedtls/error.h"
 #include "mbedtls/platform.h"
@@ -58,6 +58,11 @@
 #ifdef OC_OSCORE
 #include "oc_oscore.h"
 #endif /* OC_OSCORE */
+
+#if defined(FOR_CTT_PASS)
+#undef OC_DBG
+#define OC_DBG(...) OC_LOG("TLS", __VA_ARGS__)
+#endif
 
 OC_PROCESS(oc_tls_handler, "TLS Process");
 OC_MEMB(tls_peers_s, oc_tls_peer_t, OC_MAX_TLS_PEERS);
@@ -266,6 +271,7 @@ static oc_event_callback_retval_t
 reset_in_RFOTM(void *data)
 {
   size_t device = (size_t)data;
+  OC_DBG("oc_tls: <reset_in_RFOTM> oc_pstat_reset_device");
   oc_pstat_reset_device(device, true);
   return OC_EVENT_DONE;
 }
@@ -276,7 +282,7 @@ static oc_event_callback_retval_t oc_tls_inactive(void *data);
 static void
 oc_tls_free_invalid_peer(oc_tls_peer_t *peer)
 {
-  OC_DBG("\noc_tls: removing invalid peer");
+  OC_DBG("oc_tls: removing invalid peer");
 
   oc_list_remove(tls_peers, peer);
 
@@ -316,7 +322,7 @@ oc_tls_free_invalid_peer(oc_tls_peer_t *peer)
 static void
 oc_tls_free_peer(oc_tls_peer_t *peer, bool inactivity_cb)
 {
-  OC_DBG("\noc_tls: removing peer");
+  OC_DBG("oc_tls: removing peer");
   oc_list_remove(tls_peers, peer);
 
   size_t device = peer->endpoint.device;
@@ -530,6 +536,7 @@ check_retr_timers(void)
               mbedtls_ssl_set_client_transport_id(
                 &peer->ssl_ctx, (const unsigned char *)&peer->endpoint.addr,
                 sizeof(peer->endpoint.addr)) != 0) {
+            OC_DBG("oc_tls: oc_tls_free_peer in check_retr_timers");
             oc_tls_free_peer(peer, false);
             peer = next;
             continue;
@@ -857,10 +864,13 @@ add_new_identity_cert(oc_sec_cred_t *cred, size_t device)
         goto add_new_identity_cert_error;
       }
     }
+    OC_DBG("credusage=%d credtype=%d password=%d", cred->credusage, cred->credtype
+      , oc_string_len(cred->privatedata.data));
     cred = cred->chain;
   }
 
-#ifdef OC_DEBUG
+  // FOR_CTT_TEST
+#if  1 // defined(OC_DEBUG)
   mbedtls_x509_crt *c = &cert->cert;
   int chain_length = 0;
   while (c) {
@@ -927,6 +937,7 @@ oc_tls_configure_end_entity_cert_chain(mbedtls_ssl_config *conf, size_t device,
   oc_x509_crt_t *cert = (oc_x509_crt_t *)oc_list_head(identity_certs);
 
   while (cert != NULL) {
+    //OC_DBG("device=%d/%d credusage=%d/%d credid=%d/%d\n", cert->device, device, cert->cred->credusage, credusage, cert->cred->credid, credid);
     if (cert->device == device && cert->cred->credusage == credusage &&
         (credid == -1 || cert->cred->credid == credid)) {
       break;
@@ -935,10 +946,11 @@ oc_tls_configure_end_entity_cert_chain(mbedtls_ssl_config *conf, size_t device,
   }
 
   if (!cert || mbedtls_ssl_conf_own_cert(conf, &cert->cert, &cert->pk) != 0) {
-    OC_WRN("error configuring identity cert");
+    OC_WRN("error configuring identity cert: %p", cert);
     return -1;
   }
 
+  OC_DBG("cert_chain selected: credusage=%d credid=%d/%d\n", credusage, cert->cred->credid, credid);
   return 0;
 }
 
@@ -1070,6 +1082,8 @@ oc_tls_set_ciphersuites(mbedtls_ssl_config *conf, oc_endpoint_t *endpoint)
   /* Decide between configuring the identity cert chain vs manufacturer cert
    * chain for this device based on device ownership status.
    */
+  OC_DBG(
+    "oc_tls_set_ciphersuites: owned=%d selected_id_cred=%d selected_mfg_cred=%d", doxm->owned, selected_id_cred, selected_mfg_cred);
   if (doxm->owned &&
       oc_tls_load_identity_cert_chain(conf, device, selected_id_cred) == 0) {
 #ifdef OC_CLIENT
@@ -1131,6 +1145,13 @@ oc_tls_set_ciphersuites(mbedtls_ssl_config *conf, oc_endpoint_t *endpoint)
     }
 #endif /* OC_CLIENT */
   }
+  
+#if defined(FOR_CTT_PASS)
+  size_t t;
+  for (t = 0; ciphers[t]; ++t) {
+    printf("ciphers[%d] %x\n", t, ciphers[t]);
+  }
+#endif
   mbedtls_ssl_conf_ciphersuites(conf, ciphers);
   ciphers = NULL;
   OC_DBG("oc_tls: resetting ciphersuite selection for next handshakes");
@@ -1239,6 +1260,22 @@ verify_certificate(void *opq, mbedtls_x509_crt *crt, int depth, uint32_t *flags)
       }
       mbedtls_x509_crt *root_crt = id_cert->ctx->cert;
 
+      OC_DBG("valid_from=%d/%d/%d %d:%d:%d"
+        , root_crt->valid_from.year
+        , root_crt->valid_from.mon
+        , root_crt->valid_from.day
+        , root_crt->valid_from.hour
+        , root_crt->valid_from.min
+        , root_crt->valid_from.sec
+        );
+      OC_DBG("valid_to=%d/%d/%d %d:%d:%d"
+        , root_crt->valid_to.year
+        , root_crt->valid_to.mon
+        , root_crt->valid_to.day
+        , root_crt->valid_to.hour
+        , root_crt->valid_to.min
+        , root_crt->valid_to.sec
+        );
       OC_DBG(
         "looking for a matching trustca entry currently tracked by oc_tls");
       oc_x509_cacrt_t *ca_cert = (oc_x509_cacrt_t *)oc_list_head(ca_certs);
@@ -1382,12 +1419,21 @@ oc_tls_add_peer(oc_endpoint_t *endpoint, int role)
          *  "/oic/sec/doxm", all attempts to establish new DTLS connections
          * shall be rejected.
          */
+#if 0 //defined(FOR_CTT_PASS)
+        // CTT failed: CT1.7.2.4_Check_1: Server returned the Server Hello message, so the handshake attempt was not rejected
+        OC_WRN("oc_tls_add_peer: DTLS allowed on oxmsel == 4 for CTT PASS");
+#else
+        OC_DBG("oc_tls_add_peer: rejected on oxmsel == 4");
         return NULL;
+#endif
       }
       if (oc_list_length(tls_peers) == 0) {
         doc = true;
       } else {
         /* Allow only a single DOC */
+#if defined(FOR_CTT_PASS)
+      OC_DBG("oc_tls_add_peer: Allow only a single DOC");
+#endif
         return NULL;
       }
     }
@@ -1832,6 +1878,9 @@ oc_tls_init_connection(oc_message_t *message)
 
   if (!peer) {
     peer = oc_tls_add_peer(&message->endpoint, MBEDTLS_SSL_IS_CLIENT);
+#if defined(FOR_CTT_PASS)
+    OC_DBG("oc_tls_add_peer: role=%d", peer ? peer->role : -1);
+#endif
   }
 
   if (peer) {
@@ -1849,7 +1898,7 @@ oc_tls_init_connection(oc_message_t *message)
     int ret = mbedtls_ssl_handshake(&peer->ssl_ctx);
     if (ret < 0 && ret != MBEDTLS_ERR_SSL_WANT_READ &&
         ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-#ifdef OC_DEBUG
+#if defined(OC_DEBUG) || defined(FOR_CTT_PASS)
       char buf[256];
       mbedtls_strerror(ret, buf, 256);
       OC_ERR("oc_tls: mbedtls_error: %s", buf);
@@ -2160,12 +2209,12 @@ oc_tls_recv_message(oc_message_t *message)
     oc_tls_add_peer(&message->endpoint, MBEDTLS_SSL_IS_SERVER);
 
   if (peer) {
-#ifdef OC_DEBUG
+#if defined(FOR_CTT_PASS) || defined(OC_DEBUG)
     char u[OC_UUID_LEN];
     oc_uuid_to_str(&peer->uuid, u, OC_UUID_LEN);
-    OC_DBG("oc_tls: Received message from device %s", u);
+    OC_DBG("oc_tls: Received message %d from device %s", message->length, u);
     if (peer->endpoint.flags & TCP) {
-      OC_DBG("oc_tls_recv_message_tcp: %d %ld", (int)message->length, peer);
+      OC_DBG("oc_tls_recv_message_tcp: %d", (int)message->length);
     }
 #endif /* OC_DEBUG */
 

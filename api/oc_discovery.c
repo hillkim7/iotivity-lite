@@ -42,6 +42,11 @@
 #include "security/oc_tls.h"
 #endif
 
+#if defined(FOR_CTT_PASS)
+#undef OC_DBG
+#define OC_DBG(...) OC_LOG("DISCOVERY", __VA_ARGS__)
+#endif
+
 #ifdef OC_WKCORE
 static int
 clf_add_line_to_buffer(const char *line)

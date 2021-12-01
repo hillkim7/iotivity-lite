@@ -29,6 +29,11 @@
 #include "oc_keypair.h"
 #include "security/oc_tls.h"
 
+#if defined(FOR_CTT_PASS)
+#undef OC_DBG
+#define OC_DBG(...) OC_LOG("OC_CERTS", __VA_ARGS__)
+#endif
+
 #define UUID_PREFIX "uuid:"
 #define UUID_PREFIX_LEN (5)
 #define MBEDTLS_ULIMITED_PATHLEN 0

@@ -97,6 +97,11 @@ OC_MEMB(oc_devices_s, oc_device_t, 1);
 OC_LIST(oc_devices);
 OC_LIST(oc_cache);
 
+#if defined(FOR_CTT_PASS)
+#undef OC_DBG
+#define OC_DBG(...) OC_LOG("OBT", __VA_ARGS__)
+#endif
+
 /* Public/Private key-pair for the local domain's root of trust */
 #ifdef OC_PKI
 const char *root_subject = "C=US, O=OCF, CN=IoTivity-Lite OBT Root";
