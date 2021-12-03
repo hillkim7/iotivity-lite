@@ -45,7 +45,7 @@
 #include "esp_wifi.h"
 #include <lwip/sockets.h>
 
-#if defined(FOR_CTT_PASS)
+#if 0 //defined(FOR_CTT_PASS)
 #undef OC_DBG
 #define OC_DBG(...) OC_LOG("IPADAPTER", __VA_ARGS__)
 #endif
@@ -727,6 +727,88 @@ oc_udp_add_socks_to_fd_set(ip_context_t *dev)
 static adapter_receive_state_t
 oc_udp_receive_message(ip_context_t *dev, fd_set *fds, oc_message_t *message)
 {
+#if defined(FOR_CTT_PASS)
+       // process secure socket first.
+#ifdef OC_SECURITY
+        if (FD_ISSET(dev->secure_sock, fds)) {
+          int count = recv_msg(dev->secure_sock, message->data, OC_PDU_SIZE,
+                               &message->endpoint, false);
+          if (count < 0) {
+            return ADAPTER_STATUS_ERROR;
+          }
+          message->length = (size_t)count;
+          message->endpoint.flags = IPV6 | SECURED;
+          message->encrypted = 1;
+          FD_CLR(dev->secure_sock, fds);
+          return ADAPTER_STATUS_RECEIVE;
+        }
+#ifdef OC_IPV4
+        if (FD_ISSET(dev->secure4_sock, fds)) {
+          int count = recv_msg(dev->secure4_sock, message->data, OC_PDU_SIZE,
+                               &message->endpoint, false);
+          if (count < 0) {
+            return ADAPTER_STATUS_ERROR;
+          }
+          message->length = (size_t)count;
+          message->endpoint.flags = IPV4 | SECURED;
+          message->encrypted = 1;
+          FD_CLR(dev->secure4_sock, fds);
+          return ADAPTER_STATUS_RECEIVE;
+        }
+#endif /* OC_IPV4 */
+#endif /* OC_SECURITY */
+
+    if (FD_ISSET(dev->server_sock, fds)) {
+      int count = recv_msg(dev->server_sock, message->data, OC_PDU_SIZE,
+                           &message->endpoint, false);
+      if (count < 0) {
+        return ADAPTER_STATUS_ERROR;
+      }
+      message->length = (size_t)count;
+      message->endpoint.flags = IPV6;
+      FD_CLR(dev->server_sock, fds);
+      return ADAPTER_STATUS_RECEIVE;
+    }
+  
+    if (FD_ISSET(dev->mcast_sock, fds)) {
+      int count = recv_msg(dev->mcast_sock, message->data, OC_PDU_SIZE,
+                           &message->endpoint, true);
+      if (count < 0) {
+        return ADAPTER_STATUS_ERROR;
+      }
+      message->length = (size_t)count;
+      message->endpoint.flags = IPV6 | MULTICAST;
+      FD_CLR(dev->mcast_sock, fds);
+      return ADAPTER_STATUS_RECEIVE;
+    }
+  
+#ifdef OC_IPV4
+    if (FD_ISSET(dev->server4_sock, fds)) {
+      int count = recv_msg(dev->server4_sock, message->data, OC_PDU_SIZE,
+                           &message->endpoint, false);
+      if (count < 0) {
+        return ADAPTER_STATUS_ERROR;
+      }
+      message->length = (size_t)count;
+      message->endpoint.flags = IPV4;
+      FD_CLR(dev->server4_sock, fds);
+      return ADAPTER_STATUS_RECEIVE;
+    }
+  
+    if (FD_ISSET(dev->mcast4_sock, fds)) {
+      int count = recv_msg(dev->mcast4_sock, message->data, OC_PDU_SIZE,
+                           &message->endpoint, true);
+      if (count < 0) {
+        return ADAPTER_STATUS_ERROR;
+      }
+      message->length = (size_t)count;
+      message->endpoint.flags = IPV4 | MULTICAST;
+      FD_CLR(dev->mcast4_sock, fds);
+      return ADAPTER_STATUS_RECEIVE;
+    }
+#endif /* OC_IPV4 */
+
+#else
   if (FD_ISSET(dev->server_sock, fds)) {
     int count = recv_msg(dev->server_sock, message->data, OC_PDU_SIZE,
                          &message->endpoint, false);
@@ -805,7 +887,7 @@ oc_udp_receive_message(ip_context_t *dev, fd_set *fds, oc_message_t *message)
   }
 #endif /* OC_IPV4 */
 #endif /* OC_SECURITY */
-
+#endif
   return ADAPTER_STATUS_NONE;
 }
 
@@ -860,6 +942,7 @@ network_event_thread(void *data)
       if (oc_udp_receive_message(dev, &setfds, message) ==
           ADAPTER_STATUS_RECEIVE) {
         OC_DBG("oc_udp_receive_message %d", message->length);
+        printf("RX %d\n", message->length);
         goto common;
       }
 #ifdef OC_TCP
@@ -964,6 +1047,7 @@ send_msg(int sock, struct sockaddr_storage *receiver, oc_message_t *message)
     bytes_sent += x;
   }
   OC_DBG("Sent %d bytes", bytes_sent);
+  printf("TX %d\n", bytes_sent);
 
   if (bytes_sent == 0) {
     return -1;

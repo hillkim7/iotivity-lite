@@ -46,7 +46,7 @@ static oc_sec_pstat_t *pstat;
 static oc_sec_pstat_t pstat[OC_MAX_NUM_DEVICES];
 #endif /* !OC_DYNAMIC_ALLOCATION */
 
-#if defined(FOR_CTT_PASS)
+#if defined(LOG_FOR_CTT_PASS)
 #undef OC_DBG
 #define OC_DBG(...) OC_LOG("PSTAT", __VA_ARGS__)
 #endif
@@ -177,7 +177,7 @@ static bool
 oc_pstat_handle_state(oc_sec_pstat_t *ps, size_t device, bool from_storage,
                       bool self_reset)
 {
-  OC_DBG("oc_pstat: Entering pstat_handle_state: s=%d from_storage=%d self_reset=%d", ps->s, from_storage, self_reset);
+  OC_DBG("oc_pstat_handle_state: s=%d->%d from_storage=%d self_reset=%d", pstat[device].s, ps->s, from_storage, self_reset);
   oc_sec_acl_t *acl = oc_sec_get_acl(device);
   oc_sec_doxm_t *doxm = oc_sec_get_doxm(device);
   oc_sec_creds_t *creds = oc_sec_get_creds(device);
@@ -461,6 +461,7 @@ void
 oc_sec_pstat_default(size_t device)
 {
   oc_sec_pstat_t ps = { .s = OC_DOS_RESET };
+  OC_DBG("oc_pstat_handle_state");
   oc_pstat_handle_state(&ps, device, true, false);
   oc_sec_dump_pstat(device);
 }
@@ -611,6 +612,7 @@ oc_sec_decode_pstat(oc_rep_t *rep, bool from_storage, size_t device)
 #endif /* OC_SOFTWARE_UPDATE */
   if (from_storage || valid_transition(device, ps.s)) {
     if (!from_storage && transition_state) {
+      OC_DBG("oc_pstat_handle_state");
       bool transition_success =
         oc_pstat_handle_state(&ps, device, from_storage, false);
       return transition_success;
@@ -656,6 +658,7 @@ bool
 oc_pstat_reset_device(size_t device, bool self_reset)
 {
   oc_sec_pstat_t ps = { .s = OC_DOS_RESET };
+  OC_DBG("oc_pstat_handle_state");
   bool ret = oc_pstat_handle_state(&ps, device, false, self_reset);
   oc_sec_dump_pstat(device);
   return ret;

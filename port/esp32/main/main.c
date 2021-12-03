@@ -561,106 +561,6 @@ factory_presets_cb_new(size_t device, void *data)
 #else
       PRINT("No PKI certificates installed\n");
 #endif /* OC_SECURITY && OC_PKI */
-
-#if 0 //&& defined(OC_SECURITY) && defined(OC_PKI)
-  PRINT("factory_presets_cb: %d\n", (int)device);
-
-  const char *cert =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIEFDCCA7qgAwIBAgIJAI0K+3tTsk4eMAoGCCqGSM49BAMCMFsxDDAKBgNVBAoM\n"
-    "A09DRjEiMCAGA1UECwwZS3lyaW8gVGVzdCBJbmZyYXN0cnVjdHVyZTEnMCUGA1UE\n"
-    "AwweS3lyaW8gVEVTVCBJbnRlcm1lZGlhdGUgQ0EwMDAyMB4XDTIwMDQxNDE3MzMy\n"
-    "NloXDTIwMDUxNDE3MzMyNlowYTEMMAoGA1UECgwDT0NGMSIwIAYDVQQLDBlLeXJp\n"
-    "byBUZXN0IEluZnJhc3RydWN0dXJlMS0wKwYDVQQDDCQyYjI1ODQ4Mi04ZDZhLTQ5\n"
-    "OTEtOGQ2OS0zMTAxNDE5ODE2NDYwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARZ\n"
-    "H0LnMEg5BR41xctwQMPoNwa0ERVB1J9WWUvdrKq4GVkX/HwPUGvViISpmIS0GM8z\n"
-    "Ky2IjHm+rMrc4oSTfyX0o4ICXzCCAlswCQYDVR0TBAIwADAOBgNVHQ8BAf8EBAMC\n"
-    "A4gwKQYDVR0lBCIwIAYIKwYBBQUHAwIGCCsGAQUFBwMBBgorBgEEAYLefAEGMB0G\n"
-    "A1UdDgQWBBTS5/x0htLNUYt8JoL82HU2rkjuWDAfBgNVHSMEGDAWgBQZc2oEGgsH\n"
-    "cE9TeVM2h/wMunyuCzCBlgYIKwYBBQUHAQEEgYkwgYYwXQYIKwYBBQUHMAKGUWh0\n"
-    "dHA6Ly90ZXN0cGtpLmt5cmlvLmNvbS9vY2YvY2FjZXJ0cy9CQkU2NEY5QTdFRTM3\n"
-    "RDI5QTA1RTRCQjc3NTk1RjMwOEJFNDFFQjA3LmNydDAlBggrBgEFBQcwAYYZaHR0\n"
-    "cDovL3Rlc3RvY3NwLmt5cmlvLmNvbTBfBgNVHR8EWDBWMFSgUqBQhk5odHRwOi8v\n"
-    "dGVzdHBraS5reXJpby5jb20vb2NmL2NybHMvQkJFNjRGOUE3RUUzN0QyOUEwNUU0\n"
-    "QkI3NzU5NUYzMDhCRTQxRUIwNy5jcmwwGAYDVR0gBBEwDzANBgsrBgEEAYORVgAB\n"
-    "AjBhBgorBgEEAYORVgEABFMwUTAJAgECAgEAAgEAMDYMGTEuMy42LjEuNC4xLjUx\n"
-    "NDE0LjAuMC4xLjAMGTEuMy42LjEuNC4xLjUxNDE0LjAuMC4yLjAMBUxpdGUxDAVM\n"
-    "aXRlMTAqBgorBgEEAYORVgEBBBwwGgYLKwYBBAGDkVYBAQAGCysGAQQBg5FWAQEB\n"
-    "MDAGCisGAQQBg5FWAQIEIjAgDA4xLjMuNi4xLjQuMS43MQwJRGlzY292ZXJ5DAMx\n"
-    "LjAwCgYIKoZIzj0EAwIDSAAwRQIgedG7zHeLh9YzM0bU3DQBnKDRIFnJHiDayyuE\n"
-    "8pVfJOQCIQCo/llZOZD87IHzsyxEfXm/QhkTNA5WJOa7sjF2ngQ1/g==\n"
-    "-----END CERTIFICATE-----\n";
-
-  const char *key =
-    "-----BEGIN EC PARAMETERS-----\n"
-    "BggqhkjOPQMBBw==\n"
-    "-----END EC PARAMETERS-----\n"
-    "-----BEGIN EC PRIVATE KEY-----\n"
-    "MHcCAQEEIBF8S8rq+h8EnykDcCpAyvMam+u3D9i/5oYF5owt/+SnoAoGCCqGSM49\n"
-    "AwEHoUQDQgAEWR9C5zBIOQUeNcXLcEDD6DcGtBEVQdSfVllL3ayquBlZF/x8D1Br\n"
-    "1YiEqZiEtBjPMystiIx5vqzK3OKEk38l9A==\n"
-    "-----END EC PRIVATE KEY-----\n";
-  const char *inter_ca =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIC+jCCAqGgAwIBAgIJAPObjMBXKhG1MAoGCCqGSM49BAMCMFMxDDAKBgNVBAoM\n"
-    "A09DRjEiMCAGA1UECwwZS3lyaW8gVGVzdCBJbmZyYXN0cnVjdHVyZTEfMB0GA1UE\n"
-    "AwwWS3lyaW8gVEVTVCBST09UIENBMDAwMjAeFw0xODExMzAxODEyMTVaFw0yODEx\n"
-    "MjYxODEyMTVaMFsxDDAKBgNVBAoMA09DRjEiMCAGA1UECwwZS3lyaW8gVGVzdCBJ\n"
-    "bmZyYXN0cnVjdHVyZTEnMCUGA1UEAwweS3lyaW8gVEVTVCBJbnRlcm1lZGlhdGUg\n"
-    "Q0EwMDAyMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEvA+Gn3ofRpH40XuVppBR\n"
-    "f78mDtfclOkBd7/32yQcmK2LQ0wm/uyl2cyeABPuN6NFcR9+LYkXZ5P4Ovy9R43Q\n"
-    "vqOCAVQwggFQMBIGA1UdEwEB/wQIMAYBAf8CAQAwDgYDVR0PAQH/BAQDAgGGMB0G\n"
-    "A1UdDgQWBBQZc2oEGgsHcE9TeVM2h/wMunyuCzAfBgNVHSMEGDAWgBQoSOTlJ1jZ\n"
-    "CO4JNOSxuz1ZZh/I9TCBjQYIKwYBBQUHAQEEgYAwfjBVBggrBgEFBQcwAoZJaHR0\n"
-    "cDovL3Rlc3Rwa2kua3lyaW8uY29tL29jZi80RTY4RTNGQ0YwRjJFNEY4MEE4RDE0\n"
-    "MzhGNkExQkE1Njk1NzEzRDYzLmNydDAlBggrBgEFBQcwAYYZaHR0cDovL3Rlc3Rv\n"
-    "Y3NwLmt5cmlvLmNvbTBaBgNVHR8EUzBRME+gTaBLhklodHRwOi8vdGVzdHBraS5r\n"
-    "eXJpby5jb20vb2NmLzRFNjhFM0ZDRjBGMkU0RjgwQThEMTQzOEY2QTFCQTU2OTU3\n"
-    "MTNENjMuY3JsMAoGCCqGSM49BAMCA0cAMEQCHwXkRYd+u5pOPH544wBmBRJz/b0j\n"
-    "ppvUIHx8IUH0CioCIQDC8CnMVTOC5aIoo5Yg4k7BDDNxbRQoPujYes0OTVGgPA==\n"
-    "-----END CERTIFICATE-----\n";
-
-  const char *root_ca =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIB3zCCAYWgAwIBAgIJAPObjMBXKhGyMAoGCCqGSM49BAMCMFMxDDAKBgNVBAoM\n"
-    "A09DRjEiMCAGA1UECwwZS3lyaW8gVGVzdCBJbmZyYXN0cnVjdHVyZTEfMB0GA1UE\n"
-    "AwwWS3lyaW8gVEVTVCBST09UIENBMDAwMjAeFw0xODExMzAxNzMxMDVaFw0yODEx\n"
-    "MjcxNzMxMDVaMFMxDDAKBgNVBAoMA09DRjEiMCAGA1UECwwZS3lyaW8gVGVzdCBJ\n"
-    "bmZyYXN0cnVjdHVyZTEfMB0GA1UEAwwWS3lyaW8gVEVTVCBST09UIENBMDAwMjBZ\n"
-    "MBMGByqGSM49AgEGCCqGSM49AwEHA0IABGt1sU2QhQcK/kflKSF9TCrvKaDckLWd\n"
-    "ZoyvP6z0OrqNdtBscZgVYsSHMQZ1R19wWxsflvNr8bMVW1K3HWMkpsijQjBAMA8G\n"
-    "A1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgGGMB0GA1UdDgQWBBQoSOTlJ1jZ\n"
-    "CO4JNOSxuz1ZZh/I9TAKBggqhkjOPQQDAgNIADBFAiAlMUwgVeL8d5W4jZdFJ5Zg\n"
-    "clk7XT66LNMfGkExSjU1ngIhANOvTmd32A0kEtIpHbiKA8+RFDCPJWjN4loxrBC7\n"
-    "v0JE\n"
-    "-----END CERTIFICATE-----\n";
-
-  int ee_credid =
-    oc_pki_add_mfg_cert(0, (const unsigned char *)cert, strlen(cert),
-                        (const unsigned char *)key, strlen(key));
-  if (ee_credid < 0) {
-    PRINT("ERROR installing manufacturer EE cert\n");
-    return;
-  }
-
-  int subca_credid = oc_pki_add_mfg_intermediate_cert(
-    0, ee_credid, (const unsigned char *)inter_ca, strlen(inter_ca));
-
-  if (subca_credid < 0) {
-    PRINT("ERROR installing intermediate CA cert\n");
-    return;
-  }
-
-  int rootca_credid = oc_pki_add_mfg_trust_anchor(
-    0, (const unsigned char *)root_ca, strlen(root_ca));
-  if (rootca_credid < 0) {
-    PRINT("ERROR installing root cert\n");
-    return;
-  }
-
-  oc_pki_set_security_profile(0, OC_SP_BASELINE, OC_SP_BASELINE, ee_credid);
-  //_pki_set_security_profile(0, OC_SP_BLACK, OC_SP_BLACK, ee_credid);
-#endif /* OC_SECURITY && OC_PKI */
 }
 
 oc_event_callback_retval_t
@@ -699,6 +599,18 @@ static void set_stdin_mode(int nonblock_mode) {
 
 void ocf_show();
 
+// way to get epoch time:
+// python -c "import datetime; print(int(datetime.datetime.now().timestamp()))"
+char input_time[12];
+static int input_len = 0;
+
+static void show_time()
+{
+  time_t now;
+  time(&now);
+  printf("current: %s", ctime(&now));
+}
+
 static void cmd_help()
 {
   printf("s: show status\n");
@@ -714,11 +626,40 @@ static void switch_state()
   printf("switch state: %d\n", light_state);
 }
 
+#define INPUT_TIME_LEN 10
+
+static void reset_input_time()
+{
+  memset(input_time, 0, sizeof(input_time));
+  input_len = 0;
+}
+
+static void apply_input_time()
+{
+  if (input_len > 0)
+  {
+    if (input_len == INPUT_TIME_LEN)
+    {
+      struct timeval tv = {0, 0};
+      tv.tv_sec = atoi(input_time) + 20;
+      printf("time set: %ld\n", tv.tv_sec);
+      settimeofday(&tv, NULL);
+      show_time();
+    }
+    reset_input_time();
+  }
+}
+
+
 static void cmd_show()
 {
+  show_time();
   ocf_show();
   printf("heap size: %d\n", esp_get_free_heap_size());
   switch_state();
+  if (input_len > 0) {
+    printf("input time(%d): %s\n", input_len, input_time);
+  }
 }
 
 static void cmd_reset_ocf()
@@ -741,7 +682,11 @@ static void handle_cmd(char cmd)
     cmd_help();
     break;
   case 's':
+    cmd_show();
+    reset_input_time();
+    break;
   case '\n':
+    apply_input_time();
     cmd_show();
     break;
   case 'c':
@@ -763,6 +708,27 @@ static void handle_cmd(char cmd)
     light_state = !light_state;
     switch_state();
     break;
+  case '0':
+  case '1':
+  case '2':
+  case '3':
+  case '4':
+  case '5':
+  case '6':
+  case '7':
+  case '8':
+  case '9':
+    if (input_len < sizeof(input_time)-1)
+    {
+      input_time[input_len++] = cmd;
+      if (input_len == INPUT_TIME_LEN)
+        apply_input_time();
+    }
+    else
+    {
+      printf("too long input time\n");
+    }
+    break;
   default:
     break;
   }
@@ -772,7 +738,7 @@ oc_event_callback_retval_t cmd_input_check(void *v)
 {
   char input_cmd;
 
-  if (fread(&input_cmd, 1, 1, stdin) > 0) {
+  while (fread(&input_cmd, 1, 1, stdin) > 0) {
     handle_cmd(input_cmd);
   }
   return OC_EVENT_CONTINUE;
@@ -873,12 +839,11 @@ app_main(void)
   gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
 #endif
 
+  // Need to set current time because there is certification time validation check.
   struct timeval tv = {0, 0};
-  tv.tv_sec = 1638052063;
+  tv.tv_sec = 1638488587 + 120; // set current time
   settimeofday(&tv, NULL);
-  time_t now;
-  time(&now);
-  printf("current: %s", ctime(&now));
+  show_time();
 
 
   pthread_cond_init(&cv, NULL);

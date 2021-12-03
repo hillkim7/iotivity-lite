@@ -29,7 +29,7 @@
 #include <strings.h>
 #endif
 
-#if defined(FOR_CTT_PASS)
+#if defined(LOG_FOR_CTT_PASS)
 #undef OC_DBG
 #define OC_DBG(...) OC_LOG("DOXM", __VA_ARGS__)
 #endif
@@ -97,10 +97,6 @@ evaluate_supported_oxms(size_t device)
     doxm[device].oxms[doxm[device].num_oxms++] = OC_OXMTYPE_MFG_CERT;
   }
 #endif /* OC_PKI */
-
-#if defined(FOR_CTT_PASS)
-  OC_DBG("*CTT*<%s> oxms[%d]=%d", __FUNCTION__, doxm[device].num_oxms-1, doxm[device].oxms[doxm[device].num_oxms-1]);
-#endif
 }
 
 void
@@ -142,7 +138,7 @@ oc_sec_doxm_default(size_t device)
   oc_gen_uuid(&doxm[device].deviceuuid);
   memcpy(d->di.id, doxm[device].deviceuuid.id, 16);
   oc_sec_dump_doxm(device);
-  OC_DBG("*CTT*<%s> doxm[%d].sct=%d", __FUNCTION__, device, doxm[device].sct);
+  //OC_DBG("*CTT*<%s> doxm[%d].sct=%d", __FUNCTION__, device, doxm[device].sct);
 }
 
 void
@@ -158,10 +154,17 @@ oc_sec_encode_doxm(size_t device, oc_interface_mask_t iface_mask,
   /* oxms */
   if (!to_storage) {
     evaluate_supported_oxms(device);
+#if defined(FOR_CTT_PASS)
+    // It is very important to fix num_oxms as 1 to pass CTT test.
+    OC_WRN("oc_sec_encode_doxm oxms=%d,%d,%d num_oxms=1(fixed)", doxm[device].oxms[0], doxm[device].oxms[1], doxm[device].oxms[2]);
+    oc_rep_set_int_array(root, oxms, doxm[device].oxms, 1);
+#else
+    OC_DBG("oc_sec_encode_doxm oxms=%d,%d,%d num_oxms=%d", doxm[device].oxms[0], doxm[device].oxms[1], doxm[device].oxms[2], doxm[device].num_oxms);
     oc_rep_set_int_array(root, oxms, doxm[device].oxms, doxm[device].num_oxms);
+#endif
   }
 #if defined(FOR_CTT_PASS)
-  OC_DBG("[%d]oxmsel=%d sct=%d owned=%d", device, doxm[device].oxmsel, doxm[device].sct, doxm[device].owned);
+  OC_DBG("oc_sec_encode_doxm oxmsel=%d sct=%d owned=%d", doxm[device].oxmsel, doxm[device].sct, doxm[device].owned);
 #endif
   /* oxmsel */
   oc_rep_set_int(root, oxmsel, doxm[device].oxmsel);

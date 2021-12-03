@@ -25,7 +25,7 @@
 #include "oc_tls.h"
 #include "port/oc_connectivity.h"
 
-#if defined(FOR_CTT_PASS)
+#if 0 //defined(LOG_FOR_CTT_PASS)
 #undef OC_DBG
 #define OC_DBG(...) OC_LOG("PKI", __VA_ARGS__)
 #endif

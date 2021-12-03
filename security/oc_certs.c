@@ -29,7 +29,7 @@
 #include "oc_keypair.h"
 #include "security/oc_tls.h"
 
-#if defined(FOR_CTT_PASS)
+#if 0 //defined(LOG_FOR_CTT_PASS)
 #undef OC_DBG
 #define OC_DBG(...) OC_LOG("OC_CERTS", __VA_ARGS__)
 #endif
@@ -425,13 +425,33 @@ validate_x509v1_fields(const mbedtls_x509_crt *cert)
 
   /* notBefore */
   if (mbedtls_x509_time_is_future(&cert->valid_from)) {
-    OC_WRN("certificate not yet active");
+    time_t t;
+    time(&t);
+    OC_WRN("certificate not yet active: %d/%d/%d %d:%d:%d %s"
+      , cert->valid_from.year
+      , cert->valid_from.mon
+      , cert->valid_from.day
+      , cert->valid_from.hour
+      , cert->valid_from.min
+      , cert->valid_from.sec
+      , ctime(&t)
+      );
     return -1;
   }
 
   /* notAfter */
   if (mbedtls_x509_time_is_past(&cert->valid_to)) {
-    OC_WRN("certificate has expired");
+    time_t t;
+    time(&t);
+    OC_WRN("certificate has expired: %d/%d/%d %d:%d:%d %s"
+      , cert->valid_to.year
+      , cert->valid_to.mon
+      , cert->valid_to.day
+      , cert->valid_to.hour
+      , cert->valid_to.min
+      , cert->valid_to.sec
+      , ctime(&t)
+      );
     return -1;
   }
 

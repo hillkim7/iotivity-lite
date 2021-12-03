@@ -41,6 +41,7 @@ typedef uint64_t oc_clock_time_t;
 //#define OC_RES_BATCH_SUPPORT
 //#define FORCE_JUST_WORK 1
 #define FOR_CTT_PASS
+#define LOG_FOR_CTT_PASS
 
 /* Add support for dns lookup to the endpoint */
 #define OC_DNS_LOOKUP
